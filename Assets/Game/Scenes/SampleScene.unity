@@ -180,7 +180,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BlockGridManager
   layout: {fileID: 11400000, guid: ee55ef105888ef94e89614674aef7146, type: 2}
-  cellSize: 1
+  cellSize: 1.1
   origin: {x: -2, y: 0, z: -9}
   prefabsByColor:
   - color: 2
