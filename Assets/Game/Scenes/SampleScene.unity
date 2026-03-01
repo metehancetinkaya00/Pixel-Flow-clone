@@ -1095,6 +1095,14 @@ PrefabInstance:
       value: 
       objectReference: {fileID: 793953836}
     - target: {fileID: -3304818374793867274, guid: 115dbecc07caa744e9205c54b6db8912, type: 3}
+      propertyPath: shotsTotal
+      value: 20
+      objectReference: {fileID: 0}
+    - target: {fileID: -3304818374793867274, guid: 115dbecc07caa744e9205c54b6db8912, type: 3}
+      propertyPath: shotsRemaining
+      value: 20
+      objectReference: {fileID: 0}
+    - target: {fileID: -3304818374793867274, guid: 115dbecc07caa744e9205c54b6db8912, type: 3}
       propertyPath: bulletFireCooldown
       value: 0
       objectReference: {fileID: 0}
@@ -1607,6 +1615,14 @@ PrefabInstance:
       propertyPath: shotsText
       value: 
       objectReference: {fileID: 158521701}
+    - target: {fileID: -3304818374793867274, guid: 115dbecc07caa744e9205c54b6db8912, type: 3}
+      propertyPath: shotsTotal
+      value: 20
+      objectReference: {fileID: 0}
+    - target: {fileID: -3304818374793867274, guid: 115dbecc07caa744e9205c54b6db8912, type: 3}
+      propertyPath: shotsRemaining
+      value: 20
+      objectReference: {fileID: 0}
     - target: {fileID: -3304818374793867274, guid: 115dbecc07caa744e9205c54b6db8912, type: 3}
       propertyPath: bulletFireCooldown
       value: 0
@@ -2440,6 +2456,14 @@ PrefabInstance:
       value: 
       objectReference: {fileID: 1650506437}
     - target: {fileID: 2277644526412148600, guid: e9a4b8f8d5737cc4d893eea97409f565, type: 3}
+      propertyPath: shotsTotal
+      value: 20
+      objectReference: {fileID: 0}
+    - target: {fileID: 2277644526412148600, guid: e9a4b8f8d5737cc4d893eea97409f565, type: 3}
+      propertyPath: shotsRemaining
+      value: 20
+      objectReference: {fileID: 0}
+    - target: {fileID: 2277644526412148600, guid: e9a4b8f8d5737cc4d893eea97409f565, type: 3}
       propertyPath: bulletFireCooldown
       value: 0
       objectReference: {fileID: 0}
@@ -2605,6 +2629,14 @@ PrefabInstance:
       propertyPath: shotsText
       value: 
       objectReference: {fileID: 491018525}
+    - target: {fileID: -881087665081891350, guid: 6122b8bb117d97940ac9948c3b23c5ae, type: 3}
+      propertyPath: shotsTotal
+      value: 20
+      objectReference: {fileID: 0}
+    - target: {fileID: -881087665081891350, guid: 6122b8bb117d97940ac9948c3b23c5ae, type: 3}
+      propertyPath: shotsRemaining
+      value: 20
+      objectReference: {fileID: 0}
     - target: {fileID: -881087665081891350, guid: 6122b8bb117d97940ac9948c3b23c5ae, type: 3}
       propertyPath: bulletFireCooldown
       value: 0
