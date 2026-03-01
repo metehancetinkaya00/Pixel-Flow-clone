@@ -1,28 +1,36 @@
 using UnityEngine;
 using System.Collections.Generic;
+using DG.Tweening;
 
 public class ShooterQueueManager : MonoBehaviour
 {
-    public static ShooterQueueManager Instance;
+    public static ShooterQueueManager Instance { get; private set; }
 
-    [SerializeField] private Transform[] bottomSlots;
+    [SerializeField] private Transform[] queueSlots;
     [SerializeField] private Transform[] frontSlots;
     [SerializeField] private PathDefinition defaultPath;
 
-    private readonly List<Shooter> bottomList = new List<Shooter>();
+    [SerializeField] private float queueMoveDuration = 0.15f;
+
+    private readonly List<Shooter> queueList = new List<Shooter>();
     private readonly List<Shooter> frontList = new List<Shooter>();
 
-    private readonly Shooter[] frontOccupants = new Shooter[256];
+    private Shooter[] frontOccupants;
+    private Dictionary<Shooter, int> frontIndexMap = new Dictionary<Shooter, int>();
 
     private void Awake()
     {
         Instance = this;
+        EnsureFrontOccupantsSize();
     }
 
-    public void InitializeBottomQueue(IEnumerable<Shooter> shootersInOrder)
+    public void InitializeQueue(IEnumerable<Shooter> shootersInOrder)
     {
-        bottomList.Clear();
+        queueList.Clear();
         frontList.Clear();
+        frontIndexMap.Clear();
+
+        EnsureFrontOccupantsSize();
 
         for (int i = 0; i < frontOccupants.Length; i++)
         {
@@ -36,10 +44,10 @@ public class ShooterQueueManager : MonoBehaviour
                 continue;
             }
 
-            bottomList.Add(s);
+            queueList.Add(s);
         }
 
-        SnapBottomToSlots();
+        SnapQueueToSlots();
     }
 
     public void TryActivateShooter(Shooter clicked)
@@ -65,47 +73,98 @@ public class ShooterQueueManager : MonoBehaviour
             return;
         }
 
-        bool isBottom = bottomList.Contains(clicked);
-        bool isFront = frontList.Contains(clicked);
+        EnsureFrontOccupantsSize();
 
-        if (!isBottom && !isFront)
+        bool isInQueue = queueList.Contains(clicked);
+        bool isInFront = frontList.Contains(clicked);
+
+        if (!isInQueue && !isInFront)
         {
             return;
         }
 
-        int freeFrontIndex = GetFirstEmptyFrontSlotIndex();
-        if (freeFrontIndex < 0)
+        if (isInQueue)
         {
-            return;
-        }
-
-        if (isBottom)
-        {
-            bottomList.Remove(clicked);
-            SnapBottomToSlots();
-        }
-
-        if (isFront)
-        {
-            int currentFrontIndex = FindFrontSlotIndexOf(clicked);
-            if (currentFrontIndex >= 0 && currentFrontIndex < frontSlots.Length)
+            if (queueList.Count == 0)
             {
-                frontOccupants[currentFrontIndex] = null;
+                return;
             }
+
+            if (queueList[0] != clicked)
+            {
+                return;
+            }
+
+            int reservedFrontIndex = GetFirstEmptyFrontSlotIndex();
+            if (reservedFrontIndex < 0)
+            {
+                return;
+            }
+
+            ReserveFrontSlot(clicked, reservedFrontIndex);
+
+            queueList.RemoveAt(0);
+            AnimateQueueToSlots();
+
+            clicked.StartMove(defaultPath, () =>
+            {
+                PlaceToFrontSlot(clicked, reservedFrontIndex);
+            });
+
+            return;
         }
 
-        if (!frontList.Contains(clicked))
+        if (isInFront)
         {
-            frontList.Add(clicked);
-        }
+            int frontIndex = GetOrReserveFrontIndex(clicked);
+            if (frontIndex < 0)
+            {
+                return;
+            }
 
-        clicked.StartMove(defaultPath, () =>
-        {
-            PlaceToFrontSlot(clicked, freeFrontIndex);
-        });
+            clicked.StartMove(defaultPath, () =>
+            {
+                PlaceToFrontSlot(clicked, frontIndex);
+            });
+
+            return;
+        }
     }
 
-    private void PlaceToFrontSlot(Shooter shooter, int slotIndex)
+    private void ReserveFrontSlot(Shooter shooter, int index)
+    {
+        if (index < 0 || index >= frontOccupants.Length)
+        {
+            return;
+        }
+
+        frontOccupants[index] = shooter;
+        frontIndexMap[shooter] = index;
+
+        if (!frontList.Contains(shooter))
+        {
+            frontList.Add(shooter);
+        }
+    }
+
+    private int GetOrReserveFrontIndex(Shooter shooter)
+    {
+        if (frontIndexMap.ContainsKey(shooter))
+        {
+            return frontIndexMap[shooter];
+        }
+
+        int reservedFrontIndex = GetFirstEmptyFrontSlotIndex();
+        if (reservedFrontIndex < 0)
+        {
+            return -1;
+        }
+
+        ReserveFrontSlot(shooter, reservedFrontIndex);
+        return reservedFrontIndex;
+    }
+
+    private void PlaceToFrontSlot(Shooter shooter, int index)
     {
         if (shooter == null)
         {
@@ -114,41 +173,22 @@ public class ShooterQueueManager : MonoBehaviour
 
         if (!shooter.IsAlive)
         {
+            FreeFrontReservation(shooter);
             return;
         }
 
-        if (slotIndex < 0 || slotIndex >= frontSlots.Length)
+        if (index < 0 || index >= frontSlots.Length)
         {
             return;
         }
 
-        Transform slot = frontSlots[slotIndex];
+        Transform slot = frontSlots[index];
         shooter.transform.position = slot.position;
-
-        frontOccupants[slotIndex] = shooter;
-
-        if (!frontList.Contains(shooter))
-        {
-            frontList.Add(shooter);
-        }
-    }
-
-    private int FindFrontSlotIndexOf(Shooter shooter)
-    {
-        for (int i = 0; i < frontSlots.Length; i++)
-        {
-            if (frontOccupants[i] == shooter)
-            {
-                return i;
-            }
-        }
-
-        return -1;
     }
 
     private int GetFirstEmptyFrontSlotIndex()
     {
-        for (int i = 0; i < frontSlots.Length; i++)
+        for (int i = 0; i < frontOccupants.Length; i++)
         {
             if (frontOccupants[i] == null)
             {
@@ -159,16 +199,51 @@ public class ShooterQueueManager : MonoBehaviour
         return -1;
     }
 
-    private void SnapBottomToSlots()
+    private void EnsureFrontOccupantsSize()
     {
-        for (int i = 0; i < bottomSlots.Length; i++)
+        if (frontSlots == null)
         {
-            if (i >= bottomList.Count)
+            frontOccupants = new Shooter[0];
+            return;
+        }
+
+        if (frontOccupants == null || frontOccupants.Length != frontSlots.Length)
+        {
+            frontOccupants = new Shooter[frontSlots.Length];
+        }
+    }
+
+    private void SnapQueueToSlots()
+    {
+        int count = Mathf.Min(queueList.Count, queueSlots.Length);
+
+        for (int i = 0; i < count; i++)
+        {
+            Shooter s = queueList[i];
+            if (s == null)
             {
-                break;
+                continue;
             }
 
-            bottomList[i].transform.position = bottomSlots[i].position;
+            DOTween.Kill(s.transform);
+            s.transform.position = queueSlots[i].position;
+        }
+    }
+
+    private void AnimateQueueToSlots()
+    {
+        int count = Mathf.Min(queueList.Count, queueSlots.Length);
+
+        for (int i = 0; i < count; i++)
+        {
+            Shooter s = queueList[i];
+            if (s == null)
+            {
+                continue;
+            }
+
+            DOTween.Kill(s.transform);
+            s.transform.DOMove(queueSlots[i].position, queueMoveDuration);
         }
     }
 
@@ -179,10 +254,10 @@ public class ShooterQueueManager : MonoBehaviour
             return;
         }
 
-        if (bottomList.Contains(shooter))
+        if (queueList.Contains(shooter))
         {
-            bottomList.Remove(shooter);
-            SnapBottomToSlots();
+            queueList.Remove(shooter);
+            AnimateQueueToSlots();
         }
 
         if (frontList.Contains(shooter))
@@ -190,32 +265,39 @@ public class ShooterQueueManager : MonoBehaviour
             frontList.Remove(shooter);
         }
 
-        for (int i = 0; i < frontSlots.Length; i++)
-        {
-            if (frontOccupants[i] == shooter)
-            {
-                frontOccupants[i] = null;
-            }
-        }
+        FreeFrontReservation(shooter);
     }
 
-    public bool CanShooterShoot(Shooter shooter)
+    private void FreeFrontReservation(Shooter shooter)
     {
         if (shooter == null)
         {
-            return false;
+            return;
         }
 
-        if (!shooter.IsAlive)
+        if (frontIndexMap.ContainsKey(shooter))
         {
-            return false;
-        }
+            int idx = frontIndexMap[shooter];
 
-        if (shooter.shotsRemaining <= 0)
+            if (idx >= 0 && idx < frontOccupants.Length)
+            {
+                if (frontOccupants[idx] == shooter)
+                {
+                    frontOccupants[idx] = null;
+                }
+            }
+
+            frontIndexMap.Remove(shooter);
+        }
+        else
         {
-            return false;
+            for (int i = 0; i < frontOccupants.Length; i++)
+            {
+                if (frontOccupants[i] == shooter)
+                {
+                    frontOccupants[i] = null;
+                }
+            }
         }
-
-        return true;
     }
 }

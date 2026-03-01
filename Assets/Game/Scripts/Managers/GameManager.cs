@@ -7,6 +7,6 @@ public class GameManager : MonoBehaviour
 
     private void Start()
     {
-        ShooterQueueManager.Instance.InitializeBottomQueue(startingShootersInOrder);
+        ShooterQueueManager.Instance.InitializeQueue(startingShootersInOrder);
     }
 }

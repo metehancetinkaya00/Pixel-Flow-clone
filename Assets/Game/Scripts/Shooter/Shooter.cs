@@ -24,6 +24,12 @@ public class Shooter : MonoBehaviour
 
     public TMP_Text shotsText;
 
+    public float moveSpeed = 8f;
+
+    public float firstWaypointJumpDuration = 0.35f;
+    public float firstWaypointJumpPower = 1.2f;
+    public int firstWaypointJumpNumJumps = 1;
+
     private Coroutine moveRoutine;
     private Coroutine shootRoutine;
 
@@ -91,13 +97,24 @@ public class Shooter : MonoBehaviour
 
         isMoving = true;
 
-        while (Vector3.Distance(transform.position, firstWaypointt.position) > 0.01f)
+        bool jumpFinished = false;
+
+        DOTween.Kill(transform);
+
+        transform
+            .DOJump(firstWaypointt.position, firstWaypointJumpPower, firstWaypointJumpNumJumps, firstWaypointJumpDuration)
+            .SetEase(Ease.OutQuad)
+            .OnComplete(() =>
+            {
+                jumpFinished = true;
+            });
+
+        while (!jumpFinished)
         {
-            transform.position = Vector3.MoveTowards(
-                transform.position,
-                firstWaypointt.position,
-                path.moveSpeed * Time.deltaTime
-            );
+            if (!IsAlive)
+            {
+                yield break;
+            }
 
             yield return null;
         }
@@ -115,10 +132,15 @@ public class Shooter : MonoBehaviour
 
             while (Vector3.Distance(transform.position, pathwaypoint.position) > 0.01f)
             {
+                if (!IsAlive)
+                {
+                    yield break;
+                }
+
                 transform.position = Vector3.MoveTowards(
                     transform.position,
                     pathwaypoint.position,
-                    path.moveSpeed * Time.deltaTime
+                    moveSpeed * Time.deltaTime
                 );
 
                 yield return null;
