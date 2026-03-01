@@ -5,23 +5,14 @@ public class ShooterQueueManager : MonoBehaviour
 {
     public static ShooterQueueManager Instance { get; private set; }
 
-    [Header("Bottom Slots (Start Queue Positions)")]
     [SerializeField] private Transform[] bottomSlots;
-
-    [Header("Front Slots (Near Grid)")]
     [SerializeField] private Transform[] frontSlots;
-
-    [Header("Path")]
     [SerializeField] private PathDefinition defaultPath;
 
-    [Header("Rotation Lock (Shooter stays in this rotation)")]
-    [SerializeField] private Vector3 lockedEuler = Vector3.zero;
-
-    // Queue
-    private readonly Queue<Shooter> bottomQueue = new Queue<Shooter>();
-
-    // list for bubble sort
     private readonly List<Shooter> bottomList = new List<Shooter>();
+    private readonly List<Shooter> frontList = new List<Shooter>();
+
+    private readonly Shooter[] frontOccupants = new Shooter[256];
 
     private void Awake()
     {
@@ -30,13 +21,22 @@ public class ShooterQueueManager : MonoBehaviour
 
     public void InitializeBottomQueue(IEnumerable<Shooter> shootersInOrder)
     {
-        bottomQueue.Clear();
         bottomList.Clear();
+        frontList.Clear();
 
-        foreach (var shootorder in shootersInOrder)
+        for (int i = 0; i < frontOccupants.Length; i++)
         {
-            bottomQueue.Enqueue(shootorder);
-            bottomList.Add(shootorder);
+            frontOccupants[i] = null;
+        }
+
+        foreach (var s in shootersInOrder)
+        {
+            if (s == null)
+            {
+                continue;
+            }
+
+            bottomList.Add(s);
         }
 
         SnapBottomToSlots();
@@ -49,12 +49,26 @@ public class ShooterQueueManager : MonoBehaviour
             return;
         }
 
+        if (!clicked.IsAlive)
+        {
+            return;
+        }
+
         if (clicked.IsBusy)
         {
             return;
         }
 
-        if (!bottomList.Contains(clicked))
+        if (clicked.shotsRemaining <= 0)
+        {
+            clicked.DestroySelf();
+            return;
+        }
+
+        bool isBottom = bottomList.Contains(clicked);
+        bool isFront = frontList.Contains(clicked);
+
+        if (!isBottom && !isFront)
         {
             return;
         }
@@ -65,45 +79,78 @@ public class ShooterQueueManager : MonoBehaviour
             return;
         }
 
-        bottomList.Remove(clicked);
-
-        RebuildQueueFromList();
-
-        BubbleSortBottomByWorldX();
-        SnapBottomToSlots();
-
-        Quaternion lockedRot = Quaternion.Euler(lockedEuler);
-
-        clicked.StartMove(defaultPath, lockedRot, onFinished: () =>
+        if (isBottom)
         {
-            PlaceToFrontSlot(clicked, freeFrontIndex, lockedRot);
+            bottomList.Remove(clicked);
+            SnapBottomToSlots();
+        }
+
+        if (isFront)
+        {
+            int currentFrontIndex = FindFrontSlotIndexOf(clicked);
+            if (currentFrontIndex >= 0 && currentFrontIndex < frontSlots.Length)
+            {
+                frontOccupants[currentFrontIndex] = null;
+            }
+        }
+
+        if (!frontList.Contains(clicked))
+        {
+            frontList.Add(clicked);
+        }
+
+        clicked.StartMove(defaultPath, () =>
+        {
+            PlaceToFrontSlot(clicked, freeFrontIndex);
         });
     }
 
-    private void PlaceToFrontSlot(Shooter shooter, int slotIndex, Quaternion lockedRot)
+    private void PlaceToFrontSlot(Shooter shooter, int slotIndex)
     {
+        if (shooter == null)
+        {
+            return;
+        }
+
+        if (!shooter.IsAlive)
+        {
+            return;
+        }
+
+        if (slotIndex < 0 || slotIndex >= frontSlots.Length)
+        {
+            return;
+        }
+
         Transform slot = frontSlots[slotIndex];
         shooter.transform.position = slot.position;
-        shooter.transform.rotation = lockedRot;
+
+        frontOccupants[slotIndex] = shooter;
+
+        if (!frontList.Contains(shooter))
+        {
+            frontList.Add(shooter);
+        }
+    }
+
+    private int FindFrontSlotIndexOf(Shooter shooter)
+    {
+        for (int i = 0; i < frontSlots.Length; i++)
+        {
+            if (frontOccupants[i] == shooter)
+            {
+                return i;
+            }
+        }
+
+        return -1;
     }
 
     private int GetFirstEmptyFrontSlotIndex()
     {
         for (int i = 0; i < frontSlots.Length; i++)
         {
-            bool occupied = false;
-
-            Collider[] hits = Physics.OverlapSphere(frontSlots[i].position, 0.15f);
-            for (int h = 0; h < hits.Length; h++)
-            {
-                if (hits[h].GetComponentInParent<Shooter>() != null)
-                {
-                    occupied = true;
-                    break;
-                }
-            }
-
-            if (!occupied)
+            if (frontOccupants[i] == null)
             {
                 return i;
             }
@@ -125,30 +172,50 @@ public class ShooterQueueManager : MonoBehaviour
         }
     }
 
-    private void RebuildQueueFromList()
+    public void NotifyShooterDestroyed(Shooter shooter)
     {
-        bottomQueue.Clear();
-        for (int i = 0; i < bottomList.Count; i++)
+        if (shooter == null)
         {
-            bottomQueue.Enqueue(bottomList[i]);
+            return;
+        }
+
+        if (bottomList.Contains(shooter))
+        {
+            bottomList.Remove(shooter);
+            SnapBottomToSlots();
+        }
+
+        if (frontList.Contains(shooter))
+        {
+            frontList.Remove(shooter);
+        }
+
+        for (int i = 0; i < frontSlots.Length; i++)
+        {
+            if (frontOccupants[i] == shooter)
+            {
+                frontOccupants[i] = null;
+            }
         }
     }
 
-    private void BubbleSortBottomByWorldX()
+    public bool CanShooterShoot(Shooter shooter)
     {
-        int btmcount = bottomList.Count;
-
-        for (int i = 0; i < btmcount - 1; i++)
+        if (shooter == null)
         {
-            for (int j = 0; j < btmcount - i - 1; j++)
-            {
-                if (bottomList[j].transform.position.x > bottomList[j + 1].transform.position.x)
-                {
-                    var tmp = bottomList[j];
-                    bottomList[j] = bottomList[j + 1];
-                    bottomList[j + 1] = tmp;
-                }
-            }
+            return false;
         }
+
+        if (!shooter.IsAlive)
+        {
+            return false;
+        }
+
+        if (shooter.shotsRemaining <= 0)
+        {
+            return false;
+        }
+
+        return true;
     }
 }

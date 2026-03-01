@@ -1,20 +1,28 @@
 using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
+using TMPro;
+using DG.Tweening;
 
 [RequireComponent(typeof(Collider))]
 public class Shooter : MonoBehaviour
 {
-    [Header("Shooter")]
     public BlockColor shooterColor;
 
-    [Header("Movement")]
     public bool IsBusy;
+    public bool IsAlive = true;
 
-    [Header("Shooting")]
+    public int shotsTotal = 5;
+    public int shotsRemaining;
+
+    public Vector3 startRotationEuler;
+    public Vector3[] waypointRotationEuler;
+
     public float bulletFireCooldown = 0.15f;
     public GameObject bulletPrefab;
     public Transform bulletSpawnPoint;
+
+    public TMP_Text shotsText;
 
     private Coroutine moveRoutine;
     private Coroutine shootRoutine;
@@ -24,10 +32,27 @@ public class Shooter : MonoBehaviour
 
     private HashSet<int> lockedDepthLines = new HashSet<int>();
 
-    public void StartMove(PathDefinition path, Quaternion lockedRotation, System.Action onFinished)
+    private void Awake()
     {
+        shotsRemaining = shotsTotal;
+        UpdateShotsText();
+    }
+
+    public void StartMove(PathDefinition path, System.Action onFinished)
+    {
+        if (!IsAlive)
+        {
+            return;
+        }
+
         if (IsBusy)
         {
+            return;
+        }
+
+        if (shotsRemaining <= 0)
+        {
+            DestroySelf();
             return;
         }
 
@@ -43,12 +68,12 @@ public class Shooter : MonoBehaviour
             StopCoroutine(moveRoutine);
         }
 
-        moveRoutine = StartCoroutine(MoveAlongPath(path, lockedRotation, onFinished));
+        moveRoutine = StartCoroutine(MoveAlongPath(path, onFinished));
     }
 
-    private IEnumerator MoveAlongPath(PathDefinition path, Quaternion lockedRotation, System.Action onFinished)
+    private IEnumerator MoveAlongPath(PathDefinition path, System.Action onFinished)
     {
-        transform.rotation = lockedRotation;
+        transform.rotation = Quaternion.Euler(startRotationEuler);
 
         canShoot = false;
         isMoving = false;
@@ -74,13 +99,13 @@ public class Shooter : MonoBehaviour
                 path.moveSpeed * Time.deltaTime
             );
 
-            transform.rotation = lockedRotation;
-
             yield return null;
         }
 
         isMoving = false;
         canShoot = true;
+
+        ApplyWaypointRotation(0);
 
         for (int i = 1; i < path.waypoints.Length; i++)
         {
@@ -96,18 +121,38 @@ public class Shooter : MonoBehaviour
                     path.moveSpeed * Time.deltaTime
                 );
 
-                transform.rotation = lockedRotation;
-
                 yield return null;
             }
 
             isMoving = false;
+
+            ApplyWaypointRotation(i);
+
+            if (!IsAlive)
+            {
+                yield break;
+            }
         }
 
         StopShooting();
 
         IsBusy = false;
         onFinished?.Invoke();
+    }
+
+    private void ApplyWaypointRotation(int waypointIndex)
+    {
+        if (waypointRotationEuler == null)
+        {
+            return;
+        }
+
+        if (waypointIndex < 0 || waypointIndex >= waypointRotationEuler.Length)
+        {
+            return;
+        }
+
+        transform.rotation = Quaternion.Euler(waypointRotationEuler[waypointIndex]);
     }
 
     private void StopShooting()
@@ -125,6 +170,17 @@ public class Shooter : MonoBehaviour
     {
         while (true)
         {
+            if (!IsAlive)
+            {
+                yield break;
+            }
+
+            if (shotsRemaining <= 0)
+            {
+                DestroySelf();
+                yield break;
+            }
+
             if (canShoot)
             {
                 if (isMoving)
@@ -146,8 +202,19 @@ public class Shooter : MonoBehaviour
 
                                 if (hasTarget)
                                 {
-                                    FireBullet(target);
-                                    lockedDepthLines.Add(lineKey);
+                                    if (FireBullet(target))
+                                    {
+                                        lockedDepthLines.Add(lineKey);
+
+                                        shotsRemaining -= 1;
+                                        UpdateShotsText();
+
+                                        if (shotsRemaining <= 0)
+                                        {
+                                            DestroySelf();
+                                            yield break;
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -159,11 +226,16 @@ public class Shooter : MonoBehaviour
         }
     }
 
-    private void FireBullet(Block targetBlock)
+    private bool FireBullet(Block targetBlock)
     {
         if (bulletPrefab == null)
         {
-            return;
+            return false;
+        }
+
+        if (targetBlock == null)
+        {
+            return false;
         }
 
         Vector3 spawnPos = transform.position;
@@ -182,5 +254,55 @@ public class Shooter : MonoBehaviour
         {
             bulletScript.SetTarget(targetBlock);
         }
+
+        return true;
+    }
+
+    private void UpdateShotsText()
+    {
+        if (shotsText == null)
+        {
+            return;
+        }
+
+        shotsText.text = shotsRemaining.ToString();
+    }
+
+    public void DestroySelf()
+    {
+        if (!IsAlive)
+        {
+            return;
+        }
+
+        IsAlive = false;
+
+        if (moveRoutine != null)
+        {
+            StopCoroutine(moveRoutine);
+            moveRoutine = null;
+        }
+
+        StopShooting();
+
+        IsBusy = false;
+
+        if (ShooterQueueManager.Instance != null)
+        {
+            ShooterQueueManager.Instance.NotifyShooterDestroyed(this);
+        }
+
+        Transform t = transform;
+        DOTween.Kill(t);
+
+        t.DOScale(Vector3.zero, 0.18f)
+            .SetEase(Ease.InBack)
+            .OnComplete(() =>
+            {
+                if (gameObject != null)
+                {
+                    Destroy(gameObject);
+                }
+            });
     }
 }

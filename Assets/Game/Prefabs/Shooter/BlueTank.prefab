@@ -33,6 +33,18 @@ PrefabInstance:
       value: BlueTank
       objectReference: {fileID: 0}
     - target: {fileID: 4315918477310891794, guid: 5f87f3ffe43340e44a95c2b35416ce74, type: 3}
+      propertyPath: m_LocalScale.x
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 4315918477310891794, guid: 5f87f3ffe43340e44a95c2b35416ce74, type: 3}
+      propertyPath: m_LocalScale.y
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 4315918477310891794, guid: 5f87f3ffe43340e44a95c2b35416ce74, type: 3}
+      propertyPath: m_LocalScale.z
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 4315918477310891794, guid: 5f87f3ffe43340e44a95c2b35416ce74, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0.978
       objectReference: {fileID: 0}
@@ -152,6 +164,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Shooter
   shooterColor: 2
   IsBusy: 0
+  shotsRemaining: 5
+  startRotationEuler: {x: 0, y: 0, z: 0}
+  waypointRotationEuler: []
   bulletFireCooldown: 0.15
   bulletPrefab: {fileID: 4566071982154188720, guid: 7731f9261bb887a468ad59fcbdc8e3d6, type: 3}
   bulletSpawnPoint: {fileID: 2482992946499021117}
+  shotsText: {fileID: 0}
+  IsAlive: 1
