@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 public class ShooterQueueManager : MonoBehaviour
 {
-    public static ShooterQueueManager Instance { get; private set; }
+    public static ShooterQueueManager Instance;
 
     [SerializeField] private Transform[] bottomSlots;
     [SerializeField] private Transform[] frontSlots;
