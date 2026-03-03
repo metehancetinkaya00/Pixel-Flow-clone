@@ -18,6 +18,8 @@ public class Shooter : MonoBehaviour
     public Vector3 startRotationEuler;
     public Vector3[] waypointRotationEuler;
 
+    public float rotationSpeedDegPerSec = 360f;
+
     public float bulletFireCooldown = 0.15f;
     public GameObject bulletPrefab;
     public Transform bulletSpawnPoint;
@@ -30,6 +32,12 @@ public class Shooter : MonoBehaviour
     public float firstWaypointJumpPower = 1.2f;
     public int firstWaypointJumpNumJumps = 1;
 
+    public float frontJumpDuration = 0.35f;
+    public float frontJumpPower = 1.2f;
+    public int frontJumpNumJumps = 1;
+    public Vector3 frontJumpRotationEuler;
+    public float frontJumpExtraSpinY = 360f;
+
     private Coroutine moveRoutine;
     private Coroutine shootRoutine;
 
@@ -38,9 +46,12 @@ public class Shooter : MonoBehaviour
 
     private HashSet<int> lockedDepthLines = new HashSet<int>();
 
+    private Quaternion rotationTarget;
+
     private void Awake()
     {
         shotsRemaining = shotsTotal;
+        rotationTarget = Quaternion.Euler(startRotationEuler);
         UpdateShotsText();
     }
 
@@ -77,9 +88,47 @@ public class Shooter : MonoBehaviour
         moveRoutine = StartCoroutine(MoveAlongPath(path, onFinished));
     }
 
+    public void JumpToFrontSlot(Vector3 targetPosition, System.Action onFinished)
+    {
+        if (!IsAlive)
+        {
+            return;
+        }
+
+        IsBusy = true;
+
+        DOTween.Kill(transform);
+
+        Vector3 rotateTargetEuler = frontJumpRotationEuler + new Vector3(0f, frontJumpExtraSpinY, 0f);
+
+        Sequence seq = DOTween.Sequence();
+
+        seq.Join(transform.DOJump(targetPosition, frontJumpPower, frontJumpNumJumps, frontJumpDuration).SetEase(Ease.OutQuad));
+        seq.Join(transform.DORotate(rotateTargetEuler, frontJumpDuration, RotateMode.FastBeyond360).SetEase(Ease.OutQuad));
+
+        seq.OnComplete(() =>
+        {
+            if (!IsAlive)
+            {
+                return;
+            }
+
+            transform.position = targetPosition;
+            transform.rotation = Quaternion.Euler(frontJumpRotationEuler);
+
+            IsBusy = false;
+
+            if (onFinished != null)
+            {
+                onFinished();
+            }
+        });
+    }
+
     private IEnumerator MoveAlongPath(PathDefinition path, System.Action onFinished)
     {
-        transform.rotation = Quaternion.Euler(startRotationEuler);
+        rotationTarget = Quaternion.Euler(startRotationEuler);
+        transform.rotation = rotationTarget;
 
         canShoot = false;
         isMoving = false;
@@ -116,13 +165,15 @@ public class Shooter : MonoBehaviour
                 yield break;
             }
 
+            StepRotation();
+
             yield return null;
         }
 
         isMoving = false;
         canShoot = true;
 
-        ApplyWaypointRotation(0);
+        SetRotationTargetForWaypoint(0);
 
         for (int i = 1; i < path.waypoints.Length; i++)
         {
@@ -143,12 +194,14 @@ public class Shooter : MonoBehaviour
                     moveSpeed * Time.deltaTime
                 );
 
+                StepRotation();
+
                 yield return null;
             }
 
             isMoving = false;
 
-            ApplyWaypointRotation(i);
+            SetRotationTargetForWaypoint(i);
 
             if (!IsAlive)
             {
@@ -159,10 +212,20 @@ public class Shooter : MonoBehaviour
         StopShooting();
 
         IsBusy = false;
-        onFinished?.Invoke();
+
+        if (onFinished != null)
+        {
+            onFinished();
+        }
     }
 
-    private void ApplyWaypointRotation(int waypointIndex)
+    private void StepRotation()
+    {
+        float maxDegrees = rotationSpeedDegPerSec * Time.deltaTime;
+        transform.rotation = Quaternion.RotateTowards(transform.rotation, rotationTarget, maxDegrees);
+    }
+
+    private void SetRotationTargetForWaypoint(int waypointIndex)
     {
         if (waypointRotationEuler == null)
         {
@@ -174,7 +237,7 @@ public class Shooter : MonoBehaviour
             return;
         }
 
-        transform.rotation = Quaternion.Euler(waypointRotationEuler[waypointIndex]);
+        rotationTarget = Quaternion.Euler(waypointRotationEuler[waypointIndex]);
     }
 
     private void StopShooting()

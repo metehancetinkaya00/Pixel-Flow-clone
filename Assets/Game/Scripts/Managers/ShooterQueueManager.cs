@@ -183,7 +183,8 @@ public class ShooterQueueManager : MonoBehaviour
         }
 
         Transform slot = frontSlots[index];
-        shooter.transform.position = slot.position;
+
+        shooter.JumpToFrontSlot(slot.position, null);
     }
 
     private int GetFirstEmptyFrontSlotIndex()
