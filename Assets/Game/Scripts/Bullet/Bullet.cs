@@ -6,6 +6,9 @@ public class Bullet : MonoBehaviour
     public float speed = 18f;
     public float lifeTime = 4f;
 
+    public float hitDestroyDuration = 0.12f;
+    public float hitDestroyDelay = 0f;
+
     private Block targetBlock;
     private bool hasTarget;
     private bool hasHit;
@@ -76,7 +79,7 @@ public class Bullet : MonoBehaviour
 
         if (BlockGridManager.Instance != null)
         {
-            BlockGridManager.Instance.DestroyBlockTween(blockk, 0.12f, 0f);
+            BlockGridManager.Instance.DestroyBlockTween(blockk, hitDestroyDuration, hitDestroyDelay);
         }
 
         Destroy(gameObject);

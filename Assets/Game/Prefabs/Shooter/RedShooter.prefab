@@ -1757,7 +1757,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 9010818515641554623}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalRotation: {x: 0, y: 0.7071068, z: 0, w: 0.7071068}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 0.5, y: 0.5, z: 0.5}
   m_ConstrainProportionsScale: 0
@@ -1766,7 +1766,7 @@ Transform:
   - {fileID: 7595450178299369164}
   - {fileID: 5198561038161663548}
   m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 90, z: 0}
 --- !u!65 &-4607589211302271274
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -1803,16 +1803,29 @@ MonoBehaviour:
   shooterColor: 7
   IsBusy: 0
   IsAlive: 1
-  shotsTotal: 5
-  shotsRemaining: 5
-  startRotationEuler: {x: 0, y: 0, z: 0}
-  waypointRotationEuler: []
-  rotationSpeedDegPerSec: 360
-  bulletFireCooldown: 0.15
+  shotsTotal: 55
+  shotsRemaining: 55
+  shotsText: {fileID: 3163137322481268548}
+  bulletFireCooldown: 0
   bulletPrefab: {fileID: 4566071982154188720, guid: 7731f9261bb887a468ad59fcbdc8e3d6, type: 3}
   bulletSpawnPoint: {fileID: 7595450178299369164}
-  shotsText: {fileID: 3163137322481268548}
-  moveSpeed: 8
-  firstWaypointJumpDuration: 0.35
-  firstWaypointJumpPower: 1.2
-  firstWaypointJumpNumJumps: 1
+  rotationSpeedDegPerSec: 360
+  toSplineJumpDuration: 0.35
+  toSplineJumpPower: 1.2
+  toSplineJumpNumJumps: 1
+  toSplineJumpRotationEuler: {x: 0, y: 90, z: 0}
+  toSplineJumpExtraSpinY: 360
+  useSplineTangentRotation: 1
+  invertSplineTangent: 0
+  splineRotationOffsetEuler: {x: 0, y: 180, z: 0}
+  splineFixedRotationEuler: {x: 0, y: 90, z: 0}
+  splineRotationLookAheadT: 0.03
+  frontJumpDuration: 0.7
+  frontJumpPower: 1.2
+  frontJumpNumJumps: 1
+  frontJumpRotationEuler: {x: 0, y: 90, z: 0}
+  frontJumpExtraSpinY: 360
+  destroyDuration: 0.22
+  destroyDelay: 0
+  destroySpinY: 360
+  destroyMoveUp: 0.15

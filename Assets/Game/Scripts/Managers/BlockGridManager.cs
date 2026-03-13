@@ -1,9 +1,10 @@
 using UnityEngine;
 using System.Collections.Generic;
 using DG.Tweening;
+
 public class BlockGridManager : MonoBehaviour
 {
-    public static BlockGridManager Instance { get; private set; }
+    public static BlockGridManager Instance;
 
     [System.Serializable]
     public class ColorPrefabPair
@@ -12,38 +13,33 @@ public class BlockGridManager : MonoBehaviour
         public GameObject prefab;
     }
 
-    [Header("Grid Settings")]
-    [SerializeField] private LevelLayout layout;
-    [SerializeField] private float cellSize = 0.6f;
-    [SerializeField] private Vector3 origin = Vector3.zero;
+    public LevelLayout layout;
 
-    [Header("Prefabs By Color")]
-    [SerializeField] private ColorPrefabPair[] prefabsByColor;
+    public Vector3 gridCenterWorld = Vector3.zero;
+    public float gridWorldSizeX = 8f;
+    public float gridWorldSizeZ = 8f;
+
+    public float blockFill = 0.92f;
+    public float blockHeight = 1f;
+
+    public ColorPrefabPair[] prefabsByColor;
+
+    public int aliveBlockCount;
+
+    public System.Action OnAllBlocksCleared;
 
     private Dictionary<BlockColor, GameObject> prefabMap;
     private Block[,] gridBlocks;
 
-    public float CellSize
-    {
-        get { return cellSize; }
-    }
+    private float cellSizeX;
+    private float cellSizeZ;
+    private Vector3 gridOrigin;
 
     public Bounds GridBounds
     {
         get
         {
-            if (layout == null)
-            {
-                return new Bounds(origin, Vector3.zero);
-            }
-
-            float sizeX = layout.width * cellSize;
-            float sizeZ = layout.height * cellSize;
-
-            Vector3 center = origin + new Vector3((layout.width - 1) * cellSize * 0.5f, 0f, (layout.height - 1) * cellSize * 0.5f);
-            Vector3 size = new Vector3(sizeX, 5f, sizeZ);
-
-            return new Bounds(center, size);
+            return new Bounds(gridCenterWorld, new Vector3(gridWorldSizeX, 5f, gridWorldSizeZ));
         }
     }
 
@@ -51,11 +47,6 @@ public class BlockGridManager : MonoBehaviour
     {
         Instance = this;
         BuildPrefabMap();
-    }
-
-    private void Start()
-    {
-        BuildLevel();
     }
 
     private void BuildPrefabMap()
@@ -83,19 +74,59 @@ public class BlockGridManager : MonoBehaviour
         }
     }
 
-    private GameObject GetPrefab(BlockColor colorr)
+    private GameObject GetPrefab(BlockColor c)
     {
         if (prefabMap == null)
         {
             BuildPrefabMap();
         }
 
-        if (prefabMap != null && prefabMap.ContainsKey(colorr))
+        if (prefabMap != null && prefabMap.ContainsKey(c))
         {
-            return prefabMap[colorr];
+            return prefabMap[c];
         }
 
         return null;
+    }
+
+    private void RecalcGridMetrics()
+    {
+        if (layout == null)
+        {
+            return;
+        }
+
+        if (layout.width < 1)
+        {
+            layout.width = 1;
+        }
+
+        if (layout.height < 1)
+        {
+            layout.height = 1;
+        }
+
+        if (gridWorldSizeX <= 0f)
+        {
+            gridWorldSizeX = 1f;
+        }
+
+        if (gridWorldSizeZ <= 0f)
+        {
+            gridWorldSizeZ = 1f;
+        }
+
+        cellSizeX = gridWorldSizeX / layout.width;
+        cellSizeZ = gridWorldSizeZ / layout.height;
+
+        gridOrigin = gridCenterWorld - new Vector3(gridWorldSizeX * 0.5f, 0f, gridWorldSizeZ * 0.5f);
+    }
+
+    private Vector3 GridToWorld(int x, int y)
+    {
+        float px = gridOrigin.x + (x + 0.5f) * cellSizeX;
+        float pz = gridOrigin.z + (y + 0.5f) * cellSizeZ;
+        return new Vector3(px, gridCenterWorld.y, pz);
     }
 
     public void BuildLevel()
@@ -105,7 +136,14 @@ public class BlockGridManager : MonoBehaviour
             return;
         }
 
+        BuildPrefabMap();
+
+        layout.EnsureCellsSize();
+
+        RecalcGridMetrics();
         ClearChildren();
+
+        aliveBlockCount = 0;
 
         gridBlocks = new Block[layout.width, layout.height];
 
@@ -126,17 +164,114 @@ public class BlockGridManager : MonoBehaviour
                     continue;
                 }
 
-                Vector3 positionn = origin + new Vector3(x * cellSize, 0f, y * cellSize);
-                GameObject instancee = Instantiate(prefab, positionn, Quaternion.identity, transform);
+                Vector3 pos = GridToWorld(x, y);
+                GameObject inst = Instantiate(prefab, pos, Quaternion.identity, transform);
 
-                Block blockk = instancee.GetComponent<Block>();
-                if (blockk != null)
+                float sx = cellSizeX * blockFill;
+                float sz = cellSizeZ * blockFill;
+
+                Vector3 baseScale = inst.transform.localScale;
+                float yScale = blockHeight > 0f ? blockHeight : baseScale.y;
+
+                inst.transform.localScale = new Vector3(sx, yScale, sz);
+
+                Block b = inst.GetComponent<Block>();
+                if (b == null)
                 {
-                    blockk.gridPos = new Vector2Int(x, y);
-                    gridBlocks[x, y] = blockk;
+                    b = inst.AddComponent<Block>();
+                }
+
+                b.color = cellColor;
+                b.gridPos = new Vector2Int(x, y);
+                b.IsDying = false;
+
+                gridBlocks[x, y] = b;
+                aliveBlockCount += 1;
+            }
+        }
+
+        if (aliveBlockCount <= 0)
+        {
+            aliveBlockCount = 0;
+
+            if (OnAllBlocksCleared != null)
+            {
+                OnAllBlocksCleared();
+            }
+        }
+    }
+
+    public void DestroyBlockTween(Block blockk, float duration, float delay)
+    {
+        if (blockk == null)
+        {
+            return;
+        }
+
+        if (blockk.IsDying)
+        {
+            return;
+        }
+
+        blockk.IsDying = true;
+
+        Collider col = blockk.GetComponent<Collider>();
+        if (col != null)
+        {
+            col.enabled = false;
+        }
+
+        if (layout != null && gridBlocks != null)
+        {
+            Vector2Int pos = blockk.gridPos;
+
+            if (pos.x >= 0 && pos.y >= 0 && pos.x < layout.width && pos.y < layout.height)
+            {
+                if (gridBlocks[pos.x, pos.y] == blockk)
+                {
+                    gridBlocks[pos.x, pos.y] = null;
                 }
             }
         }
+
+        GameObject obj = blockk.gameObject;
+
+        if (obj == null)
+        {
+            return;
+        }
+
+        Transform t = obj.transform;
+
+        DOTween.Kill(t);
+
+        Sequence seq = DOTween.Sequence();
+
+        seq.Join(t.DOScale(Vector3.zero, duration).SetEase(Ease.InBack));
+        seq.Join(t.DOMoveY(t.position.y + 0.12f, duration).SetEase(Ease.OutQuad));
+        seq.Join(t.DORotate(new Vector3(0f, 180f, 0f), duration, RotateMode.FastBeyond360).SetEase(Ease.OutQuad));
+
+        seq.SetDelay(delay);
+
+        seq.OnComplete(() =>
+        {
+            aliveBlockCount -= 1;
+
+            if (aliveBlockCount <= 0)
+            {
+                aliveBlockCount = 0;
+
+                if (OnAllBlocksCleared != null)
+                {
+                    OnAllBlocksCleared();
+                }
+            }
+
+            if (obj != null)
+            {
+                Destroy(obj);
+            }
+        });
     }
 
     public int BuildLineKey(int side, int lineIndex)
@@ -153,6 +288,8 @@ public class BlockGridManager : MonoBehaviour
         {
             return false;
         }
+
+        RecalcGridMetrics();
 
         Bounds boundss = GridBounds;
 
@@ -189,34 +326,34 @@ public class BlockGridManager : MonoBehaviour
             return true;
         }
 
-        float distanceToLeft = Mathf.Abs(shooterPosition.x - boundss.min.x);
-        float distanceToRight = Mathf.Abs(boundss.max.x - shooterPosition.x);
-        float distanceToBottom = Mathf.Abs(shooterPosition.z - boundss.min.z);
-        float distanceToTop = Mathf.Abs(boundss.max.z - shooterPosition.z);
+        float dl = Mathf.Abs(shooterPosition.x - boundss.min.x);
+        float dr = Mathf.Abs(boundss.max.x - shooterPosition.x);
+        float db = Mathf.Abs(shooterPosition.z - boundss.min.z);
+        float dt = Mathf.Abs(boundss.max.z - shooterPosition.z);
 
-        int zIndex = WorldToGridZ(shooterPosition.z);
-        int xIndex = WorldToGridX(shooterPosition.x);
-
-        float minDistance = distanceToLeft;
+        float min = dl;
         side = 0;
 
-        if (distanceToRight < minDistance)
+        if (dr < min)
         {
-            minDistance = distanceToRight;
+            min = dr;
             side = 1;
         }
 
-        if (distanceToBottom < minDistance)
+        if (db < min)
         {
-            minDistance = distanceToBottom;
+            min = db;
             side = 2;
         }
 
-        if (distanceToTop < minDistance)
+        if (dt < min)
         {
-            minDistance = distanceToTop;
+            min = dt;
             side = 3;
         }
+
+        int zIndex = WorldToGridZ(shooterPosition.z);
+        int xIndex = WorldToGridX(shooterPosition.x);
 
         if (side == 0 || side == 1)
         {
@@ -274,6 +411,11 @@ public class BlockGridManager : MonoBehaviour
 
     private Block FindFirstBlockInRowFromLeft(int zIndex)
     {
+        if (layout == null)
+        {
+            return null;
+        }
+
         if (zIndex < 0 || zIndex >= layout.height)
         {
             return null;
@@ -281,10 +423,10 @@ public class BlockGridManager : MonoBehaviour
 
         for (int x = 0; x < layout.width; x++)
         {
-            Block blockk = gridBlocks[x, zIndex];
-            if (blockk != null)
+            Block b = gridBlocks[x, zIndex];
+            if (b != null && !b.IsDying)
             {
-                return blockk;
+                return b;
             }
         }
 
@@ -293,6 +435,11 @@ public class BlockGridManager : MonoBehaviour
 
     private Block FindFirstBlockInRowFromRight(int zIndex)
     {
+        if (layout == null)
+        {
+            return null;
+        }
+
         if (zIndex < 0 || zIndex >= layout.height)
         {
             return null;
@@ -300,10 +447,10 @@ public class BlockGridManager : MonoBehaviour
 
         for (int x = layout.width - 1; x >= 0; x--)
         {
-            Block blockk = gridBlocks[x, zIndex];
-            if (blockk != null)
+            Block b = gridBlocks[x, zIndex];
+            if (b != null && !b.IsDying)
             {
-                return blockk;
+                return b;
             }
         }
 
@@ -312,6 +459,11 @@ public class BlockGridManager : MonoBehaviour
 
     private Block FindFirstBlockInColumnFromBottom(int xIndex)
     {
+        if (layout == null)
+        {
+            return null;
+        }
+
         if (xIndex < 0 || xIndex >= layout.width)
         {
             return null;
@@ -319,10 +471,10 @@ public class BlockGridManager : MonoBehaviour
 
         for (int z = 0; z < layout.height; z++)
         {
-            Block blockk = gridBlocks[xIndex, z];
-            if (blockk != null)
+            Block b = gridBlocks[xIndex, z];
+            if (b != null && !b.IsDying)
             {
-                return blockk;
+                return b;
             }
         }
 
@@ -331,6 +483,11 @@ public class BlockGridManager : MonoBehaviour
 
     private Block FindFirstBlockInColumnFromTop(int xIndex)
     {
+        if (layout == null)
+        {
+            return null;
+        }
+
         if (xIndex < 0 || xIndex >= layout.width)
         {
             return null;
@@ -338,10 +495,10 @@ public class BlockGridManager : MonoBehaviour
 
         for (int z = layout.height - 1; z >= 0; z--)
         {
-            Block blockk = gridBlocks[xIndex, z];
-            if (blockk != null)
+            Block b = gridBlocks[xIndex, z];
+            if (b != null && !b.IsDying)
             {
-                return blockk;
+                return b;
             }
         }
 
@@ -350,8 +507,13 @@ public class BlockGridManager : MonoBehaviour
 
     private int WorldToGridX(float worldX)
     {
-        float localX = (worldX - origin.x) / cellSize;
-        int index = Mathf.FloorToInt(localX + 0.5f);
+        float local = (worldX - gridOrigin.x) / cellSizeX;
+        int index = Mathf.FloorToInt(local);
+
+        if (layout == null)
+        {
+            return 0;
+        }
 
         if (index < 0)
         {
@@ -368,8 +530,13 @@ public class BlockGridManager : MonoBehaviour
 
     private int WorldToGridZ(float worldZ)
     {
-        float localZ = (worldZ - origin.z) / cellSize;
-        int index = Mathf.FloorToInt(localZ + 0.5f);
+        float local = (worldZ - gridOrigin.z) / cellSizeZ;
+        int index = Mathf.FloorToInt(local);
+
+        if (layout == null)
+        {
+            return 0;
+        }
 
         if (index < 0)
         {
@@ -384,49 +551,6 @@ public class BlockGridManager : MonoBehaviour
         return index;
     }
 
-    public void DestroyBlockTween(Block blockk, float duration, float delay)
-    {
-        if (blockk == null)
-        {
-            return;
-        }
-
-        if (layout != null && gridBlocks != null)
-        {
-            Vector2Int pos = blockk.gridPos;
-
-            if (pos.x >= 0 && pos.y >= 0 && pos.x < layout.width && pos.y < layout.height)
-            {
-                if (gridBlocks[pos.x, pos.y] == blockk)
-                {
-                    gridBlocks[pos.x, pos.y] = null;
-                }
-            }
-        }
-
-        GameObject tileObjectCopy = blockk.gameObject;
-
-        if (tileObjectCopy == null)
-        {
-            return;
-        }
-
-        Transform tileTransform = tileObjectCopy.transform;
-
-        DOTween.Kill(tileTransform);
-
-        tileTransform
-            .DOScale(Vector3.zero, duration)
-            .SetEase(Ease.InBack)
-            .SetDelay(delay)
-            .OnComplete(() =>
-            {
-                if (tileObjectCopy != null)
-                {
-                    Destroy(tileObjectCopy);
-                }
-            });
-    }
     private void ClearChildren()
     {
         for (int i = transform.childCount - 1; i >= 0; i--)

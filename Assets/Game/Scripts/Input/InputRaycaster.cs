@@ -12,18 +12,21 @@ public class InputRaycaster : MonoBehaviour
 
     private void Update()
     {
+        if (LevelUIManager.Instance != null && LevelUIManager.Instance.inputLocked)
+        {
+            return;
+        }
+
         if (cam == null)
         {
             cam = Camera.main;
         }
 
-        // Mouse click
         if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
         {
             RaycastFromScreen(Mouse.current.position.ReadValue());
         }
 
-        // Touch 
         if (Touchscreen.current != null && Touchscreen.current.primaryTouch.press.wasPressedThisFrame)
         {
             RaycastFromScreen(Touchscreen.current.primaryTouch.position.ReadValue());
@@ -39,7 +42,10 @@ public class InputRaycaster : MonoBehaviour
             Shooter shooter = hit.collider.GetComponentInParent<Shooter>();
             if (shooter != null)
             {
-                ShooterQueueManager.Instance.TryActivateShooter(shooter);
+                if (ShooterQueueManager.Instance != null)
+                {
+                    ShooterQueueManager.Instance.TryActivateShooter(shooter);
+                }
             }
         }
     }

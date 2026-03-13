@@ -1,5 +1,7 @@
 using UnityEditor;
 using UnityEngine;
+using System;
+using System.Collections.Generic;
 
 [CustomEditor(typeof(LevelLayout))]
 public class LevelLayoutEditor : Editor
@@ -10,6 +12,11 @@ public class LevelLayoutEditor : Editor
 
     private const float CellSize = 22f;
     private const float CellPadding = 2f;
+
+    private static readonly string[] SearchFolders = new string[] { "Assets" };
+
+    private readonly Dictionary<BlockColor, Material> materialCache = new Dictionary<BlockColor, Material>();
+    private readonly Dictionary<BlockColor, Color> colorCache = new Dictionary<BlockColor, Color>();
 
     public override void OnInspectorGUI()
     {
@@ -29,7 +36,7 @@ public class LevelLayoutEditor : Editor
 
         GUILayout.Space(8);
 
-        paintColor = (BlockColor)EditorGUILayout.EnumPopup("Paint Color", paintColor);
+        DrawPalette();
 
         GUILayout.BeginHorizontal();
 
@@ -61,6 +68,57 @@ public class LevelLayoutEditor : Editor
         }
     }
 
+    private void DrawPalette()
+    {
+        Array values = Enum.GetValues(typeof(BlockColor));
+
+        GUILayout.BeginVertical();
+
+        int perRow = 8;
+        int countInRow = 0;
+
+        GUILayout.BeginHorizontal();
+
+        for (int i = 0; i < values.Length; i++)
+        {
+            BlockColor c = (BlockColor)values.GetValue(i);
+
+            if (c == BlockColor.None)
+            {
+                continue;
+            }
+
+            if (countInRow >= perRow)
+            {
+                GUILayout.EndHorizontal();
+                GUILayout.BeginHorizontal();
+                countInRow = 0;
+            }
+
+            Color col = GetDisplayColor(c);
+
+            Color prev = GUI.backgroundColor;
+            GUI.backgroundColor = col;
+
+            if (GUILayout.Button(c.ToString(), GUILayout.Height(22f)))
+            {
+                paintColor = c;
+            }
+
+            GUI.backgroundColor = prev;
+
+            countInRow++;
+        }
+
+        GUILayout.EndHorizontal();
+
+        GUILayout.Space(6);
+
+        paintColor = (BlockColor)EditorGUILayout.EnumPopup("Paint Color", paintColor);
+
+        GUILayout.EndVertical();
+    }
+
     private void DrawGrid(LevelLayout layout)
     {
         Event ev = Event.current;
@@ -83,7 +141,7 @@ public class LevelLayoutEditor : Editor
                 rect.height -= CellPadding * 2f;
 
                 BlockColor cellColor = layout.Get(x, y);
-                Color drawColor = ToUnityColor(cellColor);
+                Color drawColor = GetDisplayColor(cellColor);
 
                 EditorGUI.DrawRect(rect, drawColor);
 
@@ -102,11 +160,6 @@ public class LevelLayoutEditor : Editor
                 {
                     PaintCell(layout, x, y, paintButton);
                     ev.Use();
-                }
-
-                if (cellColor == BlockColor.None)
-                {
-                    EditorGUI.DrawRect(new Rect(rect.x + 1f, rect.y + 1f, rect.width - 2f, rect.height - 2f), new Color(0f, 0f, 0f, 0.15f));
                 }
 
                 Handles.color = new Color(0f, 0f, 0f, 0.25f);
@@ -137,38 +190,99 @@ public class LevelLayoutEditor : Editor
         layout.Set(x, y, paintColor);
     }
 
-    private Color ToUnityColor(BlockColor c)
+    private Color GetDisplayColor(BlockColor c)
     {
-        if (c == BlockColor.Pink)
+        if (colorCache.ContainsKey(c))
         {
-            return new Color(1f, 0.2f, 0.8f, 1f);
+            return colorCache[c];
         }
 
-        if (c == BlockColor.Blue)
+        Color result = GetColorFromMaterial(c);
+
+        colorCache[c] = result;
+        return result;
+    }
+
+    private Color GetColorFromMaterial(BlockColor c)
+    {
+        if (c == BlockColor.None)
         {
-            return new Color(0.2f, 0.6f, 1f, 1f);
+            return new Color(0f, 0f, 0f, 0.08f);
         }
 
-        if (c == BlockColor.Green)
+        Material mat = GetMaterialFor(c);
+
+        if (mat == null)
         {
-            return new Color(0.2f, 1f, 0.4f, 1f);
+            return GenerateFallbackColor(c);
         }
 
-        if (c == BlockColor.Orange)
+        if (mat.HasProperty("_BaseColor"))
         {
-            return new Color(1f, 0.55f, 0.1f, 1f);
+            return mat.GetColor("_BaseColor");
         }
 
-        if (c == BlockColor.White)
+        if (mat.HasProperty("_Color"))
         {
-            return new Color(0.95f, 0.95f, 0.95f, 1f);
+            return mat.GetColor("_Color");
         }
 
-        if (c == BlockColor.Black)
+        return mat.color;
+    }
+
+    private Material GetMaterialFor(BlockColor c)
+    {
+        if (materialCache.ContainsKey(c))
         {
-            return new Color(0.15f, 0.15f, 0.15f, 1f);
+            return materialCache[c];
         }
 
-        return new Color(0.1f, 0.1f, 0.1f, 0.1f);
+        string enumName = c.ToString();
+
+        Material found = FindMaterialByName("Mat_" + enumName);
+
+        if (found == null)
+        {
+            found = FindMaterialByName(enumName);
+        }
+
+        materialCache[c] = found;
+        return found;
+    }
+
+    private Material FindMaterialByName(string materialName)
+    {
+        string[] guids = AssetDatabase.FindAssets(materialName + " t:Material", SearchFolders);
+
+        if (guids == null || guids.Length == 0)
+        {
+            return null;
+        }
+
+        for (int i = 0; i < guids.Length; i++)
+        {
+            string path = AssetDatabase.GUIDToAssetPath(guids[i]);
+            Material mat = AssetDatabase.LoadAssetAtPath<Material>(path);
+
+            if (mat == null)
+            {
+                continue;
+            }
+
+            if (string.Equals(mat.name, materialName, StringComparison.Ordinal))
+            {
+                return mat;
+            }
+        }
+
+        string firstPath = AssetDatabase.GUIDToAssetPath(guids[0]);
+        return AssetDatabase.LoadAssetAtPath<Material>(firstPath);
+    }
+
+    private Color GenerateFallbackColor(BlockColor c)
+    {
+        int i = (int)c;
+        float h = Mathf.Repeat(i * 0.147f, 1f);
+        return Color.HSVToRGB(h, 0.65f, 1f);
     }
 }

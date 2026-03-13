@@ -4,13 +4,15 @@ using DG.Tweening;
 
 public class ShooterQueueManager : MonoBehaviour
 {
-    public static ShooterQueueManager Instance { get; private set; }
+    public static ShooterQueueManager Instance;
 
-    [SerializeField] private Transform[] queueSlots;
-    [SerializeField] private Transform[] frontSlots;
-    [SerializeField] private PathDefinition defaultPath;
+    public Transform[] queueSlots;
+    public Transform[] frontSlots;
 
-    [SerializeField] private float queueMoveDuration = 0.15f;
+    public SplinePathDefinition defaultSplinePath;
+
+    public int firstRowSelectableCount = 2;
+    public float queueMoveDuration = 0.15f;
 
     private readonly List<Shooter> queueList = new List<Shooter>();
     private readonly List<Shooter> frontList = new List<Shooter>();
@@ -24,7 +26,7 @@ public class ShooterQueueManager : MonoBehaviour
         EnsureFrontOccupantsSize();
     }
 
-    public void InitializeQueue(IEnumerable<Shooter> shootersInOrder)
+    public void InitializeQueue(Shooter[] shootersInOrder)
     {
         queueList.Clear();
         frontList.Clear();
@@ -37,14 +39,17 @@ public class ShooterQueueManager : MonoBehaviour
             frontOccupants[i] = null;
         }
 
-        foreach (var s in shootersInOrder)
+        if (shootersInOrder != null)
         {
-            if (s == null)
+            for (int i = 0; i < shootersInOrder.Length; i++)
             {
-                continue;
-            }
+                if (shootersInOrder[i] == null)
+                {
+                    continue;
+                }
 
-            queueList.Add(s);
+                queueList.Add(shootersInOrder[i]);
+            }
         }
 
         SnapQueueToSlots();
@@ -73,6 +78,11 @@ public class ShooterQueueManager : MonoBehaviour
             return;
         }
 
+        if (defaultSplinePath == null || defaultSplinePath.splineContainer == null)
+        {
+            return;
+        }
+
         EnsureFrontOccupantsSize();
 
         bool isInQueue = queueList.Contains(clicked);
@@ -85,12 +95,19 @@ public class ShooterQueueManager : MonoBehaviour
 
         if (isInQueue)
         {
-            if (queueList.Count == 0)
+            int idx = queueList.IndexOf(clicked);
+            if (idx < 0)
             {
                 return;
             }
 
-            if (queueList[0] != clicked)
+            int allowCount = firstRowSelectableCount;
+            if (allowCount < 1)
+            {
+                allowCount = 1;
+            }
+
+            if (idx >= allowCount)
             {
                 return;
             }
@@ -103,10 +120,10 @@ public class ShooterQueueManager : MonoBehaviour
 
             ReserveFrontSlot(clicked, reservedFrontIndex);
 
-            queueList.RemoveAt(0);
+            queueList.RemoveAt(idx);
             AnimateQueueToSlots();
 
-            clicked.StartMove(defaultPath, () =>
+            clicked.StartMoveOnSpline(defaultSplinePath, () =>
             {
                 PlaceToFrontSlot(clicked, reservedFrontIndex);
             });
@@ -122,7 +139,7 @@ public class ShooterQueueManager : MonoBehaviour
                 return;
             }
 
-            clicked.StartMove(defaultPath, () =>
+            clicked.StartMoveOnSpline(defaultSplinePath, () =>
             {
                 PlaceToFrontSlot(clicked, frontIndex);
             });

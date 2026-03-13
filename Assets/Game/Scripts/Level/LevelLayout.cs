@@ -5,7 +5,6 @@ public class LevelLayout : ScriptableObject
 {
     public int width = 10;
     public int height = 10;
-
     public BlockColor[] cells;
 
     public BlockColor Get(int x, int y)
@@ -20,6 +19,40 @@ public class LevelLayout : ScriptableObject
         return cells[idx];
     }
 
+    public void EnsureCellsSize()
+    {
+        if (width < 1)
+        {
+            width = 1;
+        }
+
+        if (height < 1)
+        {
+            height = 1;
+        }
+
+        int targetSize = width * height;
+
+        if (cells == null)
+        {
+            cells = new BlockColor[targetSize];
+            return;
+        }
+
+        if (cells.Length != targetSize)
+        {
+            BlockColor[] old = cells;
+            cells = new BlockColor[targetSize];
+
+            int copySize = old.Length < cells.Length ? old.Length : cells.Length;
+
+            for (int i = 0; i < copySize; i++)
+            {
+                cells[i] = old[i];
+            }
+        }
+    }
+
     public void Set(int x, int y, BlockColor value)
     {
         if (x < 0 || y < 0 || x >= width || y >= height)
@@ -30,6 +63,12 @@ public class LevelLayout : ScriptableObject
         EnsureCellsSize();
 
         int idx = y * width + x;
+
+        if (cells == null || idx < 0 || idx >= cells.Length)
+        {
+            return;
+        }
+
         cells[idx] = value;
     }
 
@@ -60,8 +99,8 @@ public class LevelLayout : ScriptableObject
             return;
         }
 
-        int copyWidth = Mathf.Min(oldWidth, width);
-        int copyHeight = Mathf.Min(oldHeight, height);
+        int copyWidth = oldWidth < width ? oldWidth : width;
+        int copyHeight = oldHeight < height ? oldHeight : height;
 
         for (int y = 0; y < copyHeight; y++)
         {
@@ -75,32 +114,6 @@ public class LevelLayout : ScriptableObject
                     cells[newIdx] = oldCells[oldIdx];
                 }
             }
-        }
-    }
-
-    public void EnsureCellsSize()
-    {
-        if (width < 1)
-        {
-            width = 1;
-        }
-
-        if (height < 1)
-        {
-            height = 1;
-        }
-
-        int targetSize = width * height;
-
-        if (cells == null)
-        {
-            cells = new BlockColor[targetSize];
-            return;
-        }
-
-        if (cells.Length != targetSize)
-        {
-            Resize(width, height);
         }
     }
 

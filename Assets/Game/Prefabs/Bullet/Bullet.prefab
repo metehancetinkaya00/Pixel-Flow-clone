@@ -154,7 +154,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1ec64a909e1bbed4fbbec2a7e24b3430, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Bullet
-  speed: 18
+  speed: 30
   lifeTime: 1
 --- !u!96 &8428197947851133694
 TrailRenderer:
