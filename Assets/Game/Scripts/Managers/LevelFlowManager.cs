@@ -82,7 +82,7 @@ public class LevelFlowManager : MonoBehaviour
 
         if (ShooterQueueManager.Instance != null)
         {
-            ShooterQueueManager.Instance.firstRowSelectableCount = data.firstRowSelectableCount;
+            ShooterQueueManager.Instance.selectableHeadColumnsCount = data.firstRowSelectableCount;
             ShooterQueueManager.Instance.defaultSplinePath = chosenSpline;
         }
 
@@ -100,20 +100,20 @@ public class LevelFlowManager : MonoBehaviour
     }
     public void CompleteLevelAndSaveProgress()
     {
-        int currentsaved = PlayerPrefs.GetInt("level_index",0);
+        int currentsaved = PlayerPrefs.GetInt("level_index", 0);
         int nextindex = currentLevelIndex + 1;
-        if(nextindex<0)
+        if (nextindex < 0)
         {
             nextindex = 0;
         }
-        if(database !=null &&database.levels !=null)
+        if (database != null && database.levels != null)
         {
-            if(nextindex >=database.levels.Length)
+            if (nextindex >= database.levels.Length)
             {
                 nextindex = database.levels.Length - 1;
             }
         }
-        if(nextindex>currentsaved)
+        if (nextindex > currentsaved)
         {
             PlayerPrefs.SetInt("level_index", nextindex);
             PlayerPrefs.Save();
@@ -167,12 +167,7 @@ public class LevelFlowManager : MonoBehaviour
             return;
         }
 
-        Vector3 spawnPos = Vector3.zero;
-
-        if (ShooterQueueManager.Instance.queueSlots != null && ShooterQueueManager.Instance.queueSlots.Length > 0)
-        {
-            spawnPos = ShooterQueueManager.Instance.queueSlots[0].position;
-        }
+        Vector3 spawnPos = ShooterQueueManager.Instance.GetQueueSpawnPosition();
 
         List<Shooter> list = new List<Shooter>();
 

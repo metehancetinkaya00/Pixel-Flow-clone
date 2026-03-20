@@ -23,6 +23,12 @@ MonoBehaviour:
   - prefab: {fileID: 1095050957342731678, guid: bf4d6ad0845fa654983947a95508d3c9, type: 3}
     count: 1
     shots: 50
-  - prefab: {fileID: -1692498578803030764, guid: e0f6a715b8011ed4abe5798e9a9e2374, type: 3}
+  - prefab: {fileID: -1692498578803030764, guid: 81334a1f4c9d9ae4ebced9b2540d7071, type: 3}
+    count: 1
+    shots: 50
+  - prefab: {fileID: -1692498578803030764, guid: 81334a1f4c9d9ae4ebced9b2540d7071, type: 3}
+    count: 1
+    shots: 50
+  - prefab: {fileID: -1692498578803030764, guid: 81334a1f4c9d9ae4ebced9b2540d7071, type: 3}
     count: 1
     shots: 50
