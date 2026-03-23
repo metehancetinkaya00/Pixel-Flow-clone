@@ -55,6 +55,9 @@ public class Shooter : MonoBehaviour
     private bool isMoving;
 
     private HashSet<int> lockedDepthLines = new HashSet<int>();
+    private Dictionary<int, Block> pendingTargets = new Dictionary<int, Block>();
+
+    private bool destroyWhenNoPending;
 
     private Quaternion rotationTarget;
 
@@ -153,6 +156,9 @@ public class Shooter : MonoBehaviour
         isMoving = false;
 
         lockedDepthLines.Clear();
+        ReleaseAllPendingTargets();
+
+        destroyWhenNoPending = false;
 
         if (shootRoutine != null)
         {
@@ -203,10 +209,10 @@ public class Shooter : MonoBehaviour
 
         Spline spline = container.Splines[index];
 
-        float4x4 splineMatrix = GetSplineMatrix(container.transform);
+        float4x4 splineMatrix = float4x4.TRS(container.transform.position, container.transform.rotation, container.transform.lossyScale);
 
         float3 startLocal = SplineUtility.EvaluatePosition(spline, 0f);
-        Vector3 startWorld = LocalToWorldPoint(container.transform, startLocal);
+        Vector3 startWorld = container.transform.TransformPoint(new Vector3(startLocal.x, startLocal.y, startLocal.z));
 
         bool jumpFinished = false;
 
@@ -279,7 +285,7 @@ public class Shooter : MonoBehaviour
             }
 
             float3 posLocal = SplineUtility.EvaluatePosition(spline, t);
-            Vector3 posWorld = LocalToWorldPoint(container.transform, posLocal);
+            Vector3 posWorld = container.transform.TransformPoint(new Vector3(posLocal.x, posLocal.y, posLocal.z));
 
             transform.position = posWorld;
 
@@ -292,8 +298,8 @@ public class Shooter : MonoBehaviour
             float3 tanLocal = SplineUtility.EvaluateTangent(spline, tRot);
             float3 upLocal = SplineUtility.EvaluateUpVector(spline, tRot);
 
-            Vector3 tanWorld = LocalToWorldDir(container.transform, tanLocal);
-            Vector3 upWorld = LocalToWorldDir(container.transform, upLocal);
+            Vector3 tanWorld = container.transform.TransformDirection(new Vector3(tanLocal.x, tanLocal.y, tanLocal.z));
+            Vector3 upWorld = container.transform.TransformDirection(new Vector3(upLocal.x, upLocal.y, upLocal.z));
 
             Quaternion targetRotation;
 
@@ -333,23 +339,6 @@ public class Shooter : MonoBehaviour
         }
     }
 
-    private float4x4 GetSplineMatrix(Transform tr)
-    {
-        return float4x4.TRS(tr.position, tr.rotation, tr.lossyScale);
-    }
-
-    private Vector3 LocalToWorldPoint(Transform tr, float3 local)
-    {
-        return tr.TransformPoint(new Vector3(local.x, local.y, local.z));
-    }
-
-    private Vector3 LocalToWorldDir(Transform tr, float3 localDir)
-    {
-        Vector3 v = new Vector3(localDir.x, localDir.y, localDir.z);
-        Vector3 w = tr.TransformDirection(v);
-        return w;
-    }
-
     private void StepRotation()
     {
         float maxDegrees = rotationSpeedDegPerSec * Time.deltaTime;
@@ -367,6 +356,44 @@ public class Shooter : MonoBehaviour
         shootRoutine = null;
     }
 
+    public void OnBulletResolved(int lineKey, bool success)
+    {
+        if (!IsAlive)
+        {
+            return;
+        }
+
+        if (pendingTargets.ContainsKey(lineKey))
+        {
+            Block b = pendingTargets[lineKey];
+            pendingTargets.Remove(lineKey);
+
+            if (!success)
+            {
+                if (b != null && !b.IsDying)
+                {
+                    b.IsTargeted = false;
+                }
+            }
+        }
+
+        if (success)
+        {
+            if (!lockedDepthLines.Contains(lineKey))
+            {
+                lockedDepthLines.Add(lineKey);
+            }
+        }
+
+        if (destroyWhenNoPending)
+        {
+            if (pendingTargets.Count == 0)
+            {
+                DestroySelf();
+            }
+        }
+    }
+
     private IEnumerator ShootLoop_LineLockedDepth_Bullet()
     {
         while (true)
@@ -378,8 +405,13 @@ public class Shooter : MonoBehaviour
 
             if (shotsRemaining <= 0)
             {
-                DestroySelf();
-                yield break;
+                destroyWhenNoPending = true;
+
+                if (pendingTargets.Count == 0)
+                {
+                    DestroySelf();
+                    yield break;
+                }
             }
 
             if (canShoot)
@@ -398,22 +430,28 @@ public class Shooter : MonoBehaviour
 
                             if (!lockedDepthLines.Contains(lineKey))
                             {
-                                Block target;
-                                bool hasTarget = BlockGridManager.Instance.TryGetTargetByLine(shooterColor, side, lineIndex, out target);
-
-                                if (hasTarget)
+                                if (!pendingTargets.ContainsKey(lineKey))
                                 {
-                                    if (FireBullet(target))
+                                    if (shotsRemaining > 0)
                                     {
-                                        lockedDepthLines.Add(lineKey);
+                                        Block target;
 
-                                        shotsRemaining -= 1;
-                                        UpdateShotsText();
-
-                                        if (shotsRemaining <= 0)
+                                        bool reserved = BlockGridManager.Instance.TryReserveTargetByLine(shooterColor, side, lineIndex, out target);
+                                        if (reserved)
                                         {
-                                            DestroySelf();
-                                            yield break;
+                                            bool fired = FireBullet(target, lineKey);
+
+                                            if (fired)
+                                            {
+                                                pendingTargets[lineKey] = target;
+                                            }
+                                            else
+                                            {
+                                                if (target != null && !target.IsDying)
+                                                {
+                                                    target.IsTargeted = false;
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -427,7 +465,7 @@ public class Shooter : MonoBehaviour
         }
     }
 
-    private bool FireBullet(Block targetBlock)
+    private bool FireBullet(Block targetBlock, int lineKey)
     {
         if (bulletPrefab == null)
         {
@@ -451,11 +489,21 @@ public class Shooter : MonoBehaviour
         GameObject bulletObj = Instantiate(bulletPrefab, spawnPos, spawnRot);
         Bullet bulletScript = bulletObj.GetComponent<Bullet>();
 
-        if (bulletScript != null)
+        if (bulletScript == null)
         {
-            bulletScript.SetTarget(targetBlock);
+            Destroy(bulletObj);
+            return false;
         }
 
+        shotsRemaining -= 1;
+        UpdateShotsText();
+
+        if (shotsRemaining <= 0)
+        {
+            destroyWhenNoPending = true;
+        }
+
+        bulletScript.Init(this, lineKey, targetBlock);
         return true;
     }
 
@@ -467,6 +515,25 @@ public class Shooter : MonoBehaviour
         }
 
         shotsText.text = shotsRemaining.ToString();
+    }
+
+    private void ReleaseAllPendingTargets()
+    {
+        if (pendingTargets == null)
+        {
+            return;
+        }
+
+        foreach (var kv in pendingTargets)
+        {
+            Block b = kv.Value;
+            if (b != null && !b.IsDying)
+            {
+                b.IsTargeted = false;
+            }
+        }
+
+        pendingTargets.Clear();
     }
 
     public void DestroySelf()

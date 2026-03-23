@@ -6,4 +6,5 @@ public class Block : MonoBehaviour
     public Vector2Int gridPos;
 
     public bool IsDying;
+    public bool IsTargeted;
 }

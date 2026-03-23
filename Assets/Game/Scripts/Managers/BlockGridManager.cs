@@ -184,6 +184,7 @@ public class BlockGridManager : MonoBehaviour
                 b.color = cellColor;
                 b.gridPos = new Vector2Int(x, y);
                 b.IsDying = false;
+                b.IsTargeted = false;
 
                 gridBlocks[x, y] = b;
                 aliveBlockCount += 1;
@@ -214,6 +215,7 @@ public class BlockGridManager : MonoBehaviour
         }
 
         blockk.IsDying = true;
+        blockk.IsTargeted = false;
 
         Collider col = blockk.GetComponent<Collider>();
         if (col != null)
@@ -235,7 +237,6 @@ public class BlockGridManager : MonoBehaviour
         }
 
         GameObject obj = blockk.gameObject;
-
         if (obj == null)
         {
             return;
@@ -367,7 +368,7 @@ public class BlockGridManager : MonoBehaviour
         return true;
     }
 
-    public bool TryGetTargetByLine(BlockColor shooterColor, int side, int lineIndex, out Block target)
+    public bool TryReserveTargetByLine(BlockColor shooterColor, int side, int lineIndex, out Block target)
     {
         target = null;
 
@@ -405,17 +406,70 @@ public class BlockGridManager : MonoBehaviour
             return false;
         }
 
+        if (candidate.IsDying)
+        {
+            return false;
+        }
+
+        if (candidate.IsTargeted)
+        {
+            return false;
+        }
+
+        candidate.IsTargeted = true;
+        target = candidate;
+        return true;
+    }
+
+    public bool TryGetTargetByLine(BlockColor shooterColor, int side, int lineIndex, out Block target)
+    {
+        target = null;
+
+        if (layout == null || gridBlocks == null)
+        {
+            return false;
+        }
+
+        Block candidate = null;
+
+        if (side == 0)
+        {
+            candidate = FindFirstBlockInRowFromLeft(lineIndex);
+        }
+        else if (side == 1)
+        {
+            candidate = FindFirstBlockInRowFromRight(lineIndex);
+        }
+        else if (side == 2)
+        {
+            candidate = FindFirstBlockInColumnFromBottom(lineIndex);
+        }
+        else if (side == 3)
+        {
+            candidate = FindFirstBlockInColumnFromTop(lineIndex);
+        }
+
+        if (candidate == null)
+        {
+            return false;
+        }
+
+        if (candidate.IsDying || candidate.IsTargeted)
+        {
+            return false;
+        }
+
+        if (candidate.color != shooterColor)
+        {
+            return false;
+        }
+
         target = candidate;
         return true;
     }
 
     private Block FindFirstBlockInRowFromLeft(int zIndex)
     {
-        if (layout == null)
-        {
-            return null;
-        }
-
         if (zIndex < 0 || zIndex >= layout.height)
         {
             return null;
@@ -435,11 +489,6 @@ public class BlockGridManager : MonoBehaviour
 
     private Block FindFirstBlockInRowFromRight(int zIndex)
     {
-        if (layout == null)
-        {
-            return null;
-        }
-
         if (zIndex < 0 || zIndex >= layout.height)
         {
             return null;
@@ -459,11 +508,6 @@ public class BlockGridManager : MonoBehaviour
 
     private Block FindFirstBlockInColumnFromBottom(int xIndex)
     {
-        if (layout == null)
-        {
-            return null;
-        }
-
         if (xIndex < 0 || xIndex >= layout.width)
         {
             return null;
@@ -483,11 +527,6 @@ public class BlockGridManager : MonoBehaviour
 
     private Block FindFirstBlockInColumnFromTop(int xIndex)
     {
-        if (layout == null)
-        {
-            return null;
-        }
-
         if (xIndex < 0 || xIndex >= layout.width)
         {
             return null;
@@ -510,11 +549,6 @@ public class BlockGridManager : MonoBehaviour
         float local = (worldX - gridOrigin.x) / cellSizeX;
         int index = Mathf.FloorToInt(local);
 
-        if (layout == null)
-        {
-            return 0;
-        }
-
         if (index < 0)
         {
             index = 0;
@@ -532,11 +566,6 @@ public class BlockGridManager : MonoBehaviour
     {
         float local = (worldZ - gridOrigin.z) / cellSizeZ;
         int index = Mathf.FloorToInt(local);
-
-        if (layout == null)
-        {
-            return 0;
-        }
 
         if (index < 0)
         {

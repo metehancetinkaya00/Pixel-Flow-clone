@@ -25,7 +25,7 @@ MonoBehaviour:
     shots: 40
   - prefab: {fileID: -1692498578803030764, guid: e0f6a715b8011ed4abe5798e9a9e2374, type: 3}
     count: 1
-    shots: 50
+    shots: 48
   - prefab: {fileID: -1692498578803030764, guid: e0f6a715b8011ed4abe5798e9a9e2374, type: 3}
     count: 2
     shots: 60
@@ -34,4 +34,4 @@ MonoBehaviour:
     shots: 36
   - prefab: {fileID: -1692498578803030764, guid: 2cfcf6c048cce5640a040bf2d842a1f6, type: 3}
     count: 1
-    shots: 22
+    shots: 20
