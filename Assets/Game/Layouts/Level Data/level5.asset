@@ -12,8 +12,35 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c497bebd6a28363409fc89950966f717, type: 3}
   m_Name: level5
   m_EditorClassIdentifier: Assembly-CSharp::LevelData
-  levelId: 
-  layout: {fileID: 0}
+  levelId: Level5
+  layout: {fileID: 11400000, guid: 6136baeab804bc14cbef00e9b633096b, type: 2}
   splinePathIndex: 0
   firstRowSelectableCount: 2
-  shooterGroups: []
+  shooterGroups:
+  - prefab: {fileID: -1692498578803030764, guid: 7b5580446bd14bb4284241b89c9c92c4, type: 3}
+    count: 2
+    shots: 20
+  - prefab: {fileID: -1692498578803030764, guid: e0f6a715b8011ed4abe5798e9a9e2374, type: 3}
+    count: 1
+    shots: 30
+  - prefab: {fileID: 5059570994964575050, guid: 4c9dfc315207d1a42873c1cf4f59766e, type: 3}
+    count: 2
+    shots: 40
+  - prefab: {fileID: -1692498578803030764, guid: 7b5580446bd14bb4284241b89c9c92c4, type: 3}
+    count: 2
+    shots: 55
+  - prefab: {fileID: 5059570994964575050, guid: 4c9dfc315207d1a42873c1cf4f59766e, type: 3}
+    count: 1
+    shots: 30
+  - prefab: {fileID: -1692498578803030764, guid: e0f6a715b8011ed4abe5798e9a9e2374, type: 3}
+    count: 2
+    shots: 30
+  - prefab: {fileID: -1692498578803030764, guid: 7b5580446bd14bb4284241b89c9c92c4, type: 3}
+    count: 2
+    shots: 60
+  - prefab: {fileID: -1692498578803030764, guid: e0f6a715b8011ed4abe5798e9a9e2374, type: 3}
+    count: 1
+    shots: 20
+  - prefab: {fileID: 5059570994964575050, guid: 4c9dfc315207d1a42873c1cf4f59766e, type: 3}
+    count: 1
+    shots: 60

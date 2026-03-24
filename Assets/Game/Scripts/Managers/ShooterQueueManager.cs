@@ -154,14 +154,6 @@ public class ShooterQueueManager : MonoBehaviour
                 return;
             }
 
-            if (selectableHeadColumnsCount > 0)
-            {
-                if (col >= selectableHeadColumnsCount)
-                {
-                    return;
-                }
-            }
-
             int reservedFrontIndex = GetFirstEmptyFrontSlotIndex();
             if (reservedFrontIndex < 0)
             {
