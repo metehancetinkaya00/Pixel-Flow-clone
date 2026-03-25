@@ -480,6 +480,12 @@ MonoBehaviour:
     prefab: {fileID: 2291055749139278584, guid: 79848ba08a6907a44b53715fe2efbc22, type: 3}
   - color: 2
     prefab: {fileID: 2630049848419407252, guid: 06834ae225ff9f44381f7d429559e0cc, type: 3}
+  - color: 10
+    prefab: {fileID: 2630049848419407252, guid: 3a05a7a698534f649b52bd95c067e66d, type: 3}
+  - color: 12
+    prefab: {fileID: 3316293331768561783, guid: bfe0cc1dc11a7cc48af6a18710cded63, type: 3}
+  - color: 11
+    prefab: {fileID: 2291055749139278584, guid: 18fe6d1142f1b974eb1f1bc714ca78b8, type: 3}
   aliveBlockCount: 0
 --- !u!4 &195200179
 Transform:
