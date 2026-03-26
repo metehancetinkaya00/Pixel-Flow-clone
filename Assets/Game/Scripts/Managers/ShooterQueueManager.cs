@@ -4,24 +4,38 @@ using DG.Tweening;
 
 public class ShooterQueueManager : MonoBehaviour
 {
-    [System.Serializable]
-    public class QueueColumn
-    {
-        public Transform[] slots;
-    }
-
     public static ShooterQueueManager Instance;
 
-    public QueueColumn[] queueColumns;
+    public Transform runtimeQueueRoot;
 
     public Transform[] frontSlots;
 
     public SplinePathDefinition defaultSplinePath;
 
-    public int selectableHeadColumnsCount = 0;
     public float queueMoveDuration = 0.15f;
 
-    private List<Shooter>[] columnLists;
+    public float groupSideSpacing = 0.6f;
+
+    public struct SpawnedPlacement
+    {
+        public Shooter shooter;
+        public int column;
+        public int depth;
+    }
+
+    private struct GroupMember
+    {
+        public Shooter shooter;
+        public int col;
+        public int depth;
+    }
+
+    private Transform[][] slotMatrix;
+
+    private int columns;
+    private int depthCount;
+
+    private Shooter[,] queueGrid;
 
     private readonly List<Shooter> frontList = new List<Shooter>();
     private Shooter[] frontOccupants;
@@ -31,81 +45,121 @@ public class ShooterQueueManager : MonoBehaviour
     {
         Instance = this;
         EnsureFrontOccupantsSize();
-        RebuildColumns();
+    }
+
+    public void ApplyLayout(QueueLayoutSettings settings)
+    {
+        int c = settings.columnCount;
+        int d = settings.depthCount;
+
+        if (c < 1)
+        {
+            c = 1;
+        }
+
+        if (d < 1)
+        {
+            d = 1;
+        }
+
+        columns = c;
+        depthCount = d;
+
+        if (runtimeQueueRoot == null)
+        {
+            GameObject go = new GameObject("QueueSlotsRuntime");
+            runtimeQueueRoot = go.transform;
+        }
+
+        if (settings.createSlotObjects)
+        {
+            ClearChildren(runtimeQueueRoot);
+        }
+
+        slotMatrix = new Transform[columns][];
+
+        for (int col = 0; col < columns; col++)
+        {
+            slotMatrix[col] = new Transform[depthCount];
+
+            for (int dep = 0; dep < depthCount; dep++)
+            {
+                Vector3 pos = settings.origin + (settings.columnStep * col) + (settings.depthStep * dep);
+
+                if (settings.createSlotObjects)
+                {
+                    GameObject sgo = new GameObject("Q_" + col.ToString() + "_" + dep.ToString());
+                    sgo.transform.SetParent(runtimeQueueRoot);
+                    sgo.transform.position = pos;
+                    slotMatrix[col][dep] = sgo.transform;
+                }
+                else
+                {
+                    GameObject sgo = new GameObject();
+                    sgo.hideFlags = HideFlags.HideAndDontSave;
+                    sgo.transform.position = pos;
+                    slotMatrix[col][dep] = sgo.transform;
+                }
+            }
+        }
+
+        queueGrid = new Shooter[columns, depthCount];
     }
 
     public Vector3 GetQueueSpawnPosition()
     {
-        if (queueColumns == null)
+        Transform t = GetSlot(0, 0);
+        if (t == null)
         {
             return Vector3.zero;
         }
 
-        for (int c = 0; c < queueColumns.Length; c++)
-        {
-            if (queueColumns[c] == null)
-            {
-                continue;
-            }
-
-            if (queueColumns[c].slots == null)
-            {
-                continue;
-            }
-
-            if (queueColumns[c].slots.Length <= 0)
-            {
-                continue;
-            }
-
-            if (queueColumns[c].slots[0] == null)
-            {
-                continue;
-            }
-
-            return queueColumns[c].slots[0].position;
-        }
-
-        return Vector3.zero;
+        return t.position;
     }
 
-    public void InitializeQueue(Shooter[] shootersInOrder)
+    public void InitializeQueueFromPlacements(List<SpawnedPlacement> placements)
     {
         EnsureFrontOccupantsSize();
-        RebuildColumns();
-        ClearColumns();
 
-        if (shootersInOrder == null)
+        if (queueGrid == null || slotMatrix == null)
         {
             return;
         }
 
-        int idx = 0;
-
-        for (int c = 0; c < GetColumnCount(); c++)
+        for (int c = 0; c < columns; c++)
         {
-            int cap = GetColumnCapacity(c);
-
-            for (int d = 0; d < cap; d++)
+            for (int d = 0; d < depthCount; d++)
             {
-                if (idx >= shootersInOrder.Length)
-                {
-                    break;
-                }
-
-                Shooter s = shootersInOrder[idx];
-                idx += 1;
-
-                if (s == null)
-                {
-                    continue;
-                }
-
-                columnLists[c].Add(s);
+                queueGrid[c, d] = null;
             }
         }
 
-        SnapAllColumns();
+        if (placements == null)
+        {
+            SnapAll();
+            return;
+        }
+
+        for (int i = 0; i < placements.Count; i++)
+        {
+            Shooter s = placements[i].shooter;
+            int col = placements[i].column;
+            int dep = placements[i].depth;
+
+            if (s == null)
+            {
+                continue;
+            }
+
+            if (!IsValidSlot(col, dep))
+            {
+                continue;
+            }
+
+            queueGrid[col, dep] = s;
+        }
+
+        SnapAll();
     }
 
     public void TryActivateShooter(Shooter clicked)
@@ -125,21 +179,14 @@ public class ShooterQueueManager : MonoBehaviour
             return;
         }
 
-        if (clicked.shotsRemaining <= 0)
-        {
-            clicked.DestroySelf();
-            return;
-        }
-
         if (defaultSplinePath == null || defaultSplinePath.splineContainer == null)
         {
             return;
         }
 
         EnsureFrontOccupantsSize();
-        RebuildColumnsIfNeeded();
 
-        bool inQueue = TryFindInQueue(clicked, out int col, out int depth);
+        bool inQueue = TryFindInQueue(clicked, out int col, out int dep);
         bool inFront = frontList.Contains(clicked);
 
         if (!inQueue && !inFront)
@@ -149,8 +196,16 @@ public class ShooterQueueManager : MonoBehaviour
 
         if (inQueue)
         {
-            if (depth != 0)
+            if (dep != 0)
             {
+                return;
+            }
+
+            int gid = clicked.linkGroupId;
+
+            if (gid > 0)
+            {
+                TryActivateGroup(gid);
                 return;
             }
 
@@ -162,10 +217,10 @@ public class ShooterQueueManager : MonoBehaviour
 
             ReserveFrontSlot(clicked, reservedFrontIndex);
 
-            columnLists[col].RemoveAt(0);
+            PopHeadFromColumn(col);
             AnimateColumn(col);
 
-            clicked.StartMoveOnSpline(defaultSplinePath, () =>
+            clicked.StartMoveOnSpline(defaultSplinePath, Vector3.zero, () =>
             {
                 PlaceToFrontSlot(clicked, reservedFrontIndex);
             });
@@ -181,13 +236,165 @@ public class ShooterQueueManager : MonoBehaviour
                 return;
             }
 
-            clicked.StartMoveOnSpline(defaultSplinePath, () =>
+            clicked.StartMoveOnSpline(defaultSplinePath, Vector3.zero, () =>
             {
                 PlaceToFrontSlot(clicked, frontIndex);
             });
 
             return;
         }
+    }
+
+    private void TryActivateGroup(int groupId)
+    {
+        List<GroupMember> members = GatherGroupMembers(groupId);
+
+        if (members.Count <= 0)
+        {
+            return;
+        }
+
+        HashSet<int> uniqueCols = new HashSet<int>();
+
+        for (int i = 0; i < members.Count; i++)
+        {
+            if (members[i].depth != 0)
+            {
+                return;
+            }
+
+            if (uniqueCols.Contains(members[i].col))
+            {
+                return;
+            }
+
+            uniqueCols.Add(members[i].col);
+        }
+
+        members.Sort((a, b) => a.col.CompareTo(b.col));
+
+        int needed = members.Count;
+
+        int startFront = FindContiguousFreeFrontSlots(needed);
+        if (startFront < 0)
+        {
+            return;
+        }
+
+        HashSet<int> touchedCols = new HashSet<int>();
+
+        for (int i = 0; i < members.Count; i++)
+        {
+            Shooter s = members[i].shooter;
+            int slotIndex = startFront + i;
+
+            ReserveFrontSlot(s, slotIndex);
+
+            if (!touchedCols.Contains(members[i].col))
+            {
+                touchedCols.Add(members[i].col);
+            }
+        }
+
+        for (int i = 0; i < members.Count; i++)
+        {
+            PopHeadFromColumn(members[i].col);
+        }
+
+        foreach (int c in touchedCols)
+        {
+            AnimateColumn(c);
+        }
+
+        float center = (needed - 1) * 0.5f;
+
+        for (int i = 0; i < members.Count; i++)
+        {
+            Shooter s = members[i].shooter;
+            int slotIndex = startFront + i;
+
+            float x = (i - center) * groupSideSpacing;
+            Vector3 offset = new Vector3(x, 0f, 0f);
+
+            s.StartMoveOnSpline(defaultSplinePath, offset, () =>
+            {
+                PlaceToFrontSlot(s, slotIndex);
+            });
+        }
+    }
+
+    private List<GroupMember> GatherGroupMembers(int groupId)
+    {
+        List<GroupMember> list = new List<GroupMember>();
+
+        if (queueGrid == null)
+        {
+            return list;
+        }
+
+        for (int c = 0; c < columns; c++)
+        {
+            for (int d = 0; d < depthCount; d++)
+            {
+                Shooter s = queueGrid[c, d];
+                if (s == null)
+                {
+                    continue;
+                }
+
+                if (s.linkGroupId == groupId)
+                {
+                    GroupMember m;
+                    m.shooter = s;
+                    m.col = c;
+                    m.depth = d;
+                    list.Add(m);
+                }
+            }
+        }
+
+        return list;
+    }
+
+    private int FindContiguousFreeFrontSlots(int needed)
+    {
+        if (needed <= 0)
+        {
+            return -1;
+        }
+
+        EnsureFrontOccupantsSize();
+
+        if (frontOccupants == null)
+        {
+            return -1;
+        }
+
+        if (frontOccupants.Length < needed)
+        {
+            return -1;
+        }
+
+        for (int start = 0; start <= frontOccupants.Length - needed; start++)
+        {
+            bool ok = true;
+
+            for (int i = 0; i < needed; i++)
+            {
+                if (frontOccupants[start + i] != null)
+                {
+                    ok = false;
+                    break;
+                }
+            }
+
+            if (ok)
+            {
+                return start;
+            }
+        }
+
+        return -1;
     }
 
     public void NotifyShooterDestroyed(Shooter shooter)
@@ -197,14 +404,11 @@ public class ShooterQueueManager : MonoBehaviour
             return;
         }
 
-        EnsureFrontOccupantsSize();
-        RebuildColumnsIfNeeded();
-
-        bool inQueue = TryFindInQueue(shooter, out int col, out int depth);
+        bool inQueue = TryFindInQueue(shooter, out int col, out int dep);
 
         if (inQueue)
         {
-            columnLists[col].RemoveAt(depth);
+            RemoveAtAndCompact(col, dep);
             AnimateColumn(col);
         }
 
@@ -216,65 +420,92 @@ public class ShooterQueueManager : MonoBehaviour
         FreeFrontReservation(shooter);
     }
 
-    private void SnapAllColumns()
+    private void PopHeadFromColumn(int col)
     {
-        for (int c = 0; c < GetColumnCount(); c++)
-        {
-            SnapColumn(c);
-        }
-    }
-
-    private void SnapColumn(int col)
-    {
-        if (!IsValidColumn(col))
+        if (queueGrid == null)
         {
             return;
         }
 
-        List<Shooter> list = columnLists[col];
-        int cap = GetColumnCapacity(col);
-
-        int count = list.Count;
-        if (count > cap)
+        if (col < 0 || col >= columns)
         {
-            count = cap;
+            return;
         }
 
-        for (int i = 0; i < count; i++)
+        for (int d = 0; d < depthCount - 1; d++)
         {
-            Shooter s = list[i];
-            Transform slot = GetSlot(col, i);
+            queueGrid[col, d] = queueGrid[col, d + 1];
+        }
 
-            if (s == null || slot == null)
+        queueGrid[col, depthCount - 1] = null;
+    }
+
+    private void RemoveAtAndCompact(int col, int dep)
+    {
+        if (queueGrid == null)
+        {
+            return;
+        }
+
+        if (col < 0 || col >= columns)
+        {
+            return;
+        }
+
+        if (dep < 0 || dep >= depthCount)
+        {
+            return;
+        }
+
+        for (int d = dep; d < depthCount - 1; d++)
+        {
+            queueGrid[col, d] = queueGrid[col, d + 1];
+        }
+
+        queueGrid[col, depthCount - 1] = null;
+    }
+
+    private void SnapAll()
+    {
+        if (queueGrid == null || slotMatrix == null)
+        {
+            return;
+        }
+
+        for (int c = 0; c < columns; c++)
+        {
+            for (int d = 0; d < depthCount; d++)
             {
-                continue;
-            }
+                Shooter s = queueGrid[c, d];
+                Transform slot = GetSlot(c, d);
 
-            DOTween.Kill(s.transform);
-            s.transform.position = slot.position;
+                if (s == null || slot == null)
+                {
+                    continue;
+                }
+
+                DOTween.Kill(s.transform);
+                s.transform.position = slot.position;
+            }
         }
     }
 
     private void AnimateColumn(int col)
     {
-        if (!IsValidColumn(col))
+        if (queueGrid == null || slotMatrix == null)
         {
             return;
         }
 
-        List<Shooter> list = columnLists[col];
-        int cap = GetColumnCapacity(col);
-
-        int count = list.Count;
-        if (count > cap)
+        if (col < 0 || col >= columns)
         {
-            count = cap;
+            return;
         }
 
-        for (int i = 0; i < count; i++)
+        for (int d = 0; d < depthCount; d++)
         {
-            Shooter s = list[i];
-            Transform slot = GetSlot(col, i);
+            Shooter s = queueGrid[col, d];
+            Transform slot = GetSlot(col, d);
 
             if (s == null || slot == null)
             {
@@ -286,30 +517,24 @@ public class ShooterQueueManager : MonoBehaviour
         }
     }
 
-    private bool TryFindInQueue(Shooter shooter, out int col, out int depth)
+    private bool TryFindInQueue(Shooter shooter, out int col, out int dep)
     {
         col = -1;
-        depth = -1;
+        dep = -1;
 
-        if (columnLists == null)
+        if (queueGrid == null)
         {
             return false;
         }
 
-        for (int c = 0; c < columnLists.Length; c++)
+        for (int c = 0; c < columns; c++)
         {
-            List<Shooter> list = columnLists[c];
-            if (list == null)
+            for (int d = 0; d < depthCount; d++)
             {
-                continue;
-            }
-
-            for (int d = 0; d < list.Count; d++)
-            {
-                if (list[d] == shooter)
+                if (queueGrid[c, d] == shooter)
                 {
                     col = c;
-                    depth = d;
+                    dep = d;
                     return true;
                 }
             }
@@ -318,103 +543,19 @@ public class ShooterQueueManager : MonoBehaviour
         return false;
     }
 
-    private void RebuildColumns()
+    private bool IsValidSlot(int col, int dep)
     {
-        int cols = GetColumnCount();
-
-        if (cols <= 0)
-        {
-            columnLists = new List<Shooter>[0];
-            return;
-        }
-
-        columnLists = new List<Shooter>[cols];
-
-        for (int i = 0; i < cols; i++)
-        {
-            columnLists[i] = new List<Shooter>();
-        }
-    }
-
-    private void RebuildColumnsIfNeeded()
-    {
-        int cols = GetColumnCount();
-
-        if (cols <= 0)
-        {
-            columnLists = new List<Shooter>[0];
-            return;
-        }
-
-        if (columnLists == null || columnLists.Length != cols)
-        {
-            RebuildColumns();
-        }
-    }
-
-    private void ClearColumns()
-    {
-        if (columnLists == null)
-        {
-            return;
-        }
-
-        for (int i = 0; i < columnLists.Length; i++)
-        {
-            if (columnLists[i] == null)
-            {
-                continue;
-            }
-
-            columnLists[i].Clear();
-        }
-    }
-
-    private int GetColumnCount()
-    {
-        if (queueColumns == null)
-        {
-            return 0;
-        }
-
-        return queueColumns.Length;
-    }
-
-    private int GetColumnCapacity(int col)
-    {
-        if (!IsValidColumn(col))
-        {
-            return 0;
-        }
-
-        Transform[] slots = queueColumns[col].slots;
-
-        if (slots == null)
-        {
-            return 0;
-        }
-
-        return slots.Length;
-    }
-
-    private bool IsValidColumn(int col)
-    {
-        if (queueColumns == null)
+        if (slotMatrix == null)
         {
             return false;
         }
 
-        if (col < 0 || col >= queueColumns.Length)
+        if (col < 0 || col >= columns)
         {
             return false;
         }
 
-        if (queueColumns[col] == null)
-        {
-            return false;
-        }
-
-        if (queueColumns[col].slots == null)
+        if (dep < 0 || dep >= depthCount)
         {
             return false;
         }
@@ -422,21 +563,14 @@ public class ShooterQueueManager : MonoBehaviour
         return true;
     }
 
-    private Transform GetSlot(int col, int depth)
+    private Transform GetSlot(int col, int dep)
     {
-        if (!IsValidColumn(col))
+        if (!IsValidSlot(col, dep))
         {
             return null;
         }
 
-        Transform[] slots = queueColumns[col].slots;
-
-        if (depth < 0 || depth >= slots.Length)
-        {
-            return null;
-        }
-
-        return slots[depth];
+        return slotMatrix[col][dep];
     }
 
     private void PlaceToFrontSlot(Shooter shooter, int index)
@@ -553,6 +687,14 @@ public class ShooterQueueManager : MonoBehaviour
                     frontOccupants[i] = null;
                 }
             }
+        }
+    }
+
+    private void ClearChildren(Transform t)
+    {
+        for (int i = t.childCount - 1; i >= 0; i--)
+        {
+            Destroy(t.GetChild(i).gameObject);
         }
     }
 }

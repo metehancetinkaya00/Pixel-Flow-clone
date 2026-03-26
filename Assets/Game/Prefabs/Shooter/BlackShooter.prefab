@@ -9,7 +9,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 4140251737021967904}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Peashooter.obj.cleaner.materialmerger.gles
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -58,7 +58,7 @@ GameObject:
   - component: {fileID: 6239194373494041156}
   - component: {fileID: 4595177783630612345}
   - component: {fileID: 8642434867639329864}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Object_3
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -148,7 +148,7 @@ GameObject:
   - component: {fileID: 3996570315792687203}
   - component: {fileID: 7242468334852251252}
   - component: {fileID: 669530134016802286}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Object_12
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -238,7 +238,7 @@ GameObject:
   - component: {fileID: 2693361766020102309}
   - component: {fileID: 8430578472169527287}
   - component: {fileID: 3173474881486101923}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Object_5
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -328,7 +328,7 @@ GameObject:
   - component: {fileID: 2648667380696712523}
   - component: {fileID: 605306710359048600}
   - component: {fileID: 5823598954658594536}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Object_10
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -416,7 +416,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 7595450178299369164}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: ShootPOS
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -449,7 +449,7 @@ GameObject:
   - component: {fileID: 4337395888726773978}
   - component: {fileID: 5937565044761991274}
   - component: {fileID: 3163137322481268548}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Text (TMP)
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -630,7 +630,7 @@ GameObject:
   - component: {fileID: 6607848867809782031}
   - component: {fileID: 7109594431254796013}
   - component: {fileID: 5306343613075517388}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: mouth
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -720,7 +720,7 @@ GameObject:
   - component: {fileID: 7947935862540987457}
   - component: {fileID: 6407931698446421133}
   - component: {fileID: 6770664053240291598}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Object_7
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -810,7 +810,7 @@ GameObject:
   - component: {fileID: 1526214962865881091}
   - component: {fileID: 5985516243610968539}
   - component: {fileID: 9019280533276700069}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Object_9
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -898,7 +898,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 5198561038161663548}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Sketchfab_model
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -932,7 +932,7 @@ GameObject:
   - component: {fileID: 5490621542801279198}
   - component: {fileID: 89348139305193706}
   - component: {fileID: 1158306699798661866}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Object_14
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1022,7 +1022,7 @@ GameObject:
   - component: {fileID: 497438224268643047}
   - component: {fileID: 2027394406215733556}
   - component: {fileID: 3948114479708311039}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Object_11
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1112,7 +1112,7 @@ GameObject:
   - component: {fileID: 8660829273895247734}
   - component: {fileID: 7923153778085557904}
   - component: {fileID: 1748815533679319335}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Object_6
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1202,7 +1202,7 @@ GameObject:
   - component: {fileID: 2208339294145537704}
   - component: {fileID: 1790086059059738505}
   - component: {fileID: 7057879069231617198}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Object_8
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1292,7 +1292,7 @@ GameObject:
   - component: {fileID: 5160724710714867192}
   - component: {fileID: 4293711130525748253}
   - component: {fileID: 2022990219522340389}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Object_16
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1382,7 +1382,7 @@ GameObject:
   - component: {fileID: 5664733840058285122}
   - component: {fileID: 6640959657232261105}
   - component: {fileID: 6797862334000136354}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Object_17
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1472,7 +1472,7 @@ GameObject:
   - component: {fileID: 396029669046893537}
   - component: {fileID: 7254054163398253730}
   - component: {fileID: 292876307596866339}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Object_4
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1562,7 +1562,7 @@ GameObject:
   - component: {fileID: 4355034502549174371}
   - component: {fileID: 4846144383608835122}
   - component: {fileID: 3353484988716637446}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Object_13
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1652,7 +1652,7 @@ GameObject:
   - component: {fileID: 2644832607810665958}
   - component: {fileID: 5913150541874477640}
   - component: {fileID: 3012229930861005947}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Object_2
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1742,7 +1742,7 @@ GameObject:
   - component: {fileID: 9199486047407156485}
   - component: {fileID: -4607589211302271274}
   - component: {fileID: -1692498578803030764}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: BlackShooter
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1801,6 +1801,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Shooter
   shooterColor: 6
+  linkGroupId: -1
   IsBusy: 0
   IsAlive: 1
   shotsTotal: 55

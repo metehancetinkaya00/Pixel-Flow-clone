@@ -9,15 +9,31 @@ public class LevelData : ScriptableObject
 
     public int splinePathIndex = 0;
 
-    public int firstRowSelectableCount = 2;
+    public QueueLayoutSettings queueLayout;
 
-    public ShooterGroup[] shooterGroups;
+    public ShooterQueuePlacementData[] queuePlacements;
 }
 
 [System.Serializable]
-public struct ShooterGroup
+public struct QueueLayoutSettings
+{
+    public int columnCount;
+    public int depthCount;
+
+    public Vector3 origin;
+    public Vector3 columnStep;
+    public Vector3 depthStep;
+
+    public bool createSlotObjects;
+}
+
+[System.Serializable]
+public struct ShooterQueuePlacementData
 {
     public Shooter prefab;
-    public int count;
     public int shots;
+    public int groupId;
+
+    public int column;
+    public int depth;
 }

@@ -4,6 +4,7 @@ using UnityEngine.InputSystem;
 public class InputRaycaster : MonoBehaviour
 {
     [SerializeField] private Camera cam;
+    [SerializeField] private LayerMask shooterLayer = ~0;
 
     private void Reset()
     {
@@ -12,11 +13,6 @@ public class InputRaycaster : MonoBehaviour
 
     private void Update()
     {
-        if (LevelUIManager.Instance != null && LevelUIManager.Instance.inputLocked)
-        {
-            return;
-        }
-
         if (cam == null)
         {
             cam = Camera.main;
@@ -37,7 +33,7 @@ public class InputRaycaster : MonoBehaviour
     {
         Ray ray = cam.ScreenPointToRay(screenPos);
 
-        if (Physics.Raycast(ray, out RaycastHit hit, 300f))
+        if (Physics.Raycast(ray, out RaycastHit hit, 300f, shooterLayer, QueryTriggerInteraction.Collide))
         {
             Shooter shooter = hit.collider.GetComponentInParent<Shooter>();
             if (shooter != null)

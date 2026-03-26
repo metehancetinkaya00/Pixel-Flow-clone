@@ -38,6 +38,31 @@ public class LevelFlowManager : MonoBehaviour
         LoadLevel(currentLevelIndex);
     }
 
+    public void CompleteLevelAndSaveProgress()
+    {
+        int currentSaved = PlayerPrefs.GetInt("level_index", startLevelIndex);
+        int nextIndex = currentLevelIndex + 1;
+
+        if (nextIndex < 0)
+        {
+            nextIndex = 0;
+        }
+
+        if (database != null && database.levels != null && database.levels.Length > 0)
+        {
+            if (nextIndex >= database.levels.Length)
+            {
+                nextIndex = database.levels.Length - 1;
+            }
+        }
+
+        if (nextIndex > currentSaved)
+        {
+            PlayerPrefs.SetInt("level_index", nextIndex);
+            PlayerPrefs.Save();
+        }
+    }
+
     private void LoadLevel(int index)
     {
         if (database == null)
@@ -62,9 +87,6 @@ public class LevelFlowManager : MonoBehaviour
 
         currentLevelIndex = index;
 
-        PlayerPrefs.SetInt("level_index", currentLevelIndex);
-        PlayerPrefs.Save();
-
         if (LevelUIManager.Instance != null)
         {
             LevelUIManager.Instance.HideWin();
@@ -82,8 +104,12 @@ public class LevelFlowManager : MonoBehaviour
 
         if (ShooterQueueManager.Instance != null)
         {
-            ShooterQueueManager.Instance.selectableHeadColumnsCount = data.firstRowSelectableCount;
             ShooterQueueManager.Instance.defaultSplinePath = chosenSpline;
+
+            if (data.queueLayout.columnCount > 0 && data.queueLayout.depthCount > 0)
+            {
+                ShooterQueueManager.Instance.ApplyLayout(data.queueLayout);
+            }
         }
 
         if (BlockGridManager.Instance != null)
@@ -97,27 +123,6 @@ public class LevelFlowManager : MonoBehaviour
         }
 
         SpawnShooters(data);
-    }
-    public void CompleteLevelAndSaveProgress()
-    {
-        int currentsaved = PlayerPrefs.GetInt("level_index", 0);
-        int nextindex = currentLevelIndex + 1;
-        if (nextindex < 0)
-        {
-            nextindex = 0;
-        }
-        if (database != null && database.levels != null)
-        {
-            if (nextindex >= database.levels.Length)
-            {
-                nextindex = database.levels.Length - 1;
-            }
-        }
-        if (nextindex > currentsaved)
-        {
-            PlayerPrefs.SetInt("level_index", nextindex);
-            PlayerPrefs.Save();
-        }
     }
 
     private void HandleLevelCompleted()
@@ -155,46 +160,43 @@ public class LevelFlowManager : MonoBehaviour
             return;
         }
 
-        if (data == null)
-        {
-            ShooterQueueManager.Instance.InitializeQueue(new Shooter[0]);
-            return;
-        }
-
-        if (data.shooterGroups == null)
-        {
-            ShooterQueueManager.Instance.InitializeQueue(new Shooter[0]);
-            return;
-        }
-
         Vector3 spawnPos = ShooterQueueManager.Instance.GetQueueSpawnPosition();
 
-        List<Shooter> list = new List<Shooter>();
+        List<ShooterQueueManager.SpawnedPlacement> placements = new List<ShooterQueueManager.SpawnedPlacement>();
 
-        for (int g = 0; g < data.shooterGroups.Length; g++)
+        if (data != null && data.queuePlacements != null)
         {
-            ShooterGroup group = data.shooterGroups[g];
-
-            if (group.prefab == null)
+            for (int i = 0; i < data.queuePlacements.Length; i++)
             {
-                continue;
-            }
+                ShooterQueuePlacementData p = data.queuePlacements[i];
 
-            int count = group.count;
-            if (count < 0)
-            {
-                count = 0;
-            }
+                if (p.prefab == null)
+                {
+                    continue;
+                }
 
-            for (int i = 0; i < count; i++)
-            {
-                Shooter inst = Instantiate(group.prefab, spawnPos, group.prefab.transform.rotation);
-                inst.ApplyShots(group.shots);
-                list.Add(inst);
+                Shooter inst = Instantiate(p.prefab, spawnPos, p.prefab.transform.rotation);
+
+                int shots = p.shots;
+                if (shots < 0)
+                {
+                    shots = 0;
+                }
+
+                inst.ApplyShots(shots);
+
+                inst.linkGroupId = p.groupId > 0 ? p.groupId : 0;
+
+                ShooterQueueManager.SpawnedPlacement sp;
+                sp.shooter = inst;
+                sp.column = p.column;
+                sp.depth = p.depth;
+
+                placements.Add(sp);
             }
         }
 
-        ShooterQueueManager.Instance.InitializeQueue(list.ToArray());
+        ShooterQueueManager.Instance.InitializeQueueFromPlacements(placements);
     }
 
     private void CleanupDynamicObjects()

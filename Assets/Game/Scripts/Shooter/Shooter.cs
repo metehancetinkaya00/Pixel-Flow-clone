@@ -11,6 +11,8 @@ public class Shooter : MonoBehaviour
 {
     public BlockColor shooterColor;
 
+    public int linkGroupId = 0;
+
     public bool IsBusy;
     public bool IsAlive = true;
 
@@ -60,11 +62,13 @@ public class Shooter : MonoBehaviour
     private bool destroyWhenNoPending;
 
     private Quaternion rotationTarget;
+    private Vector3 formationOffset;
 
     private void Awake()
     {
         shotsRemaining = shotsTotal;
         rotationTarget = transform.rotation;
+        formationOffset = Vector3.zero;
         UpdateShotsText();
     }
 
@@ -80,7 +84,12 @@ public class Shooter : MonoBehaviour
         UpdateShotsText();
     }
 
-    public void StartMoveOnSpline(SplinePathDefinition splinePath, System.Action onSplineFinished)
+    public void StartMoveOnSpline(SplinePathDefinition splinePath, System.Action onFinished)
+    {
+        StartMoveOnSpline(splinePath, Vector3.zero, onFinished);
+    }
+
+    public void StartMoveOnSpline(SplinePathDefinition splinePath, Vector3 offset, System.Action onFinished)
     {
         if (!IsAlive)
         {
@@ -103,6 +112,8 @@ public class Shooter : MonoBehaviour
             return;
         }
 
+        formationOffset = offset;
+
         IsBusy = true;
 
         if (moveRoutine != null)
@@ -110,7 +121,7 @@ public class Shooter : MonoBehaviour
             StopCoroutine(moveRoutine);
         }
 
-        moveRoutine = StartCoroutine(MoveAlongSpline(splinePath, onSplineFinished));
+        moveRoutine = StartCoroutine(MoveAlongSpline(splinePath, onFinished));
     }
 
     public void JumpToFrontSlot(Vector3 targetPosition, System.Action onFinished)
@@ -131,6 +142,8 @@ public class Shooter : MonoBehaviour
         seq.Join(transform.DOJump(targetPosition, frontJumpPower, frontJumpNumJumps, frontJumpDuration).SetEase(Ease.OutQuad));
         seq.Join(transform.DORotate(rotateTargetEuler, frontJumpDuration, RotateMode.FastBeyond360).SetEase(Ease.OutQuad));
 
+        seq.SetDelay(0f);
+
         seq.OnComplete(() =>
         {
             if (!IsAlive)
@@ -150,7 +163,7 @@ public class Shooter : MonoBehaviour
         });
     }
 
-    private IEnumerator MoveAlongSpline(SplinePathDefinition splinePath, System.Action onSplineFinished)
+    private IEnumerator MoveAlongSpline(SplinePathDefinition splinePath, System.Action onFinished)
     {
         canShoot = false;
         isMoving = false;
@@ -174,9 +187,9 @@ public class Shooter : MonoBehaviour
             StopShooting();
             IsBusy = false;
 
-            if (onSplineFinished != null)
+            if (onFinished != null)
             {
-                onSplineFinished();
+                onFinished();
             }
 
             yield break;
@@ -187,9 +200,9 @@ public class Shooter : MonoBehaviour
             StopShooting();
             IsBusy = false;
 
-            if (onSplineFinished != null)
+            if (onFinished != null)
             {
-                onSplineFinished();
+                onFinished();
             }
 
             yield break;
@@ -209,10 +222,30 @@ public class Shooter : MonoBehaviour
 
         Spline spline = container.Splines[index];
 
-        float4x4 splineMatrix = float4x4.TRS(container.transform.position, container.transform.rotation, container.transform.lossyScale);
+        Vector3 s = container.transform.lossyScale;
+        float4x4 splineMatrix = float4x4.TRS(container.transform.position, container.transform.rotation, new float3(s.x, s.y, s.z));
+        float splineLength = SplineUtility.CalculateLength(spline, splineMatrix);
+
+        float tStartRot = splineRotationLookAheadT;
+        if (tStartRot > 1f)
+        {
+            tStartRot = 1f;
+        }
 
         float3 startLocal = SplineUtility.EvaluatePosition(spline, 0f);
-        Vector3 startWorld = container.transform.TransformPoint(new Vector3(startLocal.x, startLocal.y, startLocal.z));
+        float3 startTanLocal = SplineUtility.EvaluateTangent(spline, tStartRot);
+        float3 startUpLocal = SplineUtility.EvaluateUpVector(spline, tStartRot);
+
+        Vector3 baseStartWorld = container.transform.TransformPoint(new Vector3(startLocal.x, startLocal.y, startLocal.z));
+
+        Vector3 startTanWorld = container.transform.TransformDirection(new Vector3(startTanLocal.x, startTanLocal.y, startTanLocal.z));
+        Vector3 startUpWorld = container.transform.TransformDirection(new Vector3(startUpLocal.x, startUpLocal.y, startUpLocal.z));
+
+        Vector3 startForward = startTanWorld.sqrMagnitude > 0.000001f ? startTanWorld.normalized : Vector3.forward;
+        Vector3 startUp = startUpWorld.sqrMagnitude > 0.000001f ? startUpWorld.normalized : Vector3.up;
+        Vector3 startRight = Vector3.Cross(startUp, startForward).normalized;
+
+        Vector3 startWorld = baseStartWorld + (startRight * formationOffset.x) + (startUp * formationOffset.y) + (startForward * formationOffset.z);
 
         bool jumpFinished = false;
 
@@ -230,8 +263,6 @@ public class Shooter : MonoBehaviour
             jumpFinished = true;
         });
 
-        isMoving = true;
-
         while (!jumpFinished)
         {
             if (!IsAlive)
@@ -246,10 +277,7 @@ public class Shooter : MonoBehaviour
         transform.position = startWorld;
         transform.rotation = Quaternion.Euler(toSplineJumpRotationEuler);
 
-        isMoving = false;
         canShoot = true;
-
-        float splineLength = SplineUtility.CalculateLength(spline, splineMatrix);
 
         if (splineLength <= 0.0001f)
         {
@@ -257,9 +285,9 @@ public class Shooter : MonoBehaviour
             StopShooting();
             IsBusy = false;
 
-            if (onSplineFinished != null)
+            if (onFinished != null)
             {
-                onSplineFinished();
+                onFinished();
             }
 
             yield break;
@@ -285,9 +313,7 @@ public class Shooter : MonoBehaviour
             }
 
             float3 posLocal = SplineUtility.EvaluatePosition(spline, t);
-            Vector3 posWorld = container.transform.TransformPoint(new Vector3(posLocal.x, posLocal.y, posLocal.z));
-
-            transform.position = posWorld;
+            Vector3 basePosWorld = container.transform.TransformPoint(new Vector3(posLocal.x, posLocal.y, posLocal.z));
 
             float tRot = t + splineRotationLookAheadT;
             if (tRot > 1f)
@@ -301,27 +327,32 @@ public class Shooter : MonoBehaviour
             Vector3 tanWorld = container.transform.TransformDirection(new Vector3(tanLocal.x, tanLocal.y, tanLocal.z));
             Vector3 upWorld = container.transform.TransformDirection(new Vector3(upLocal.x, upLocal.y, upLocal.z));
 
-            Quaternion targetRotation;
+            Vector3 forwardDir = tanWorld.sqrMagnitude > 0.000001f ? tanWorld.normalized : transform.forward;
+            Vector3 upDir = upWorld.sqrMagnitude > 0.000001f ? upWorld.normalized : Vector3.up;
+            Vector3 rightDir = Vector3.Cross(upDir, forwardDir).normalized;
+
+            Vector3 posWorld = basePosWorld + (rightDir * formationOffset.x) + (upDir * formationOffset.y) + (forwardDir * formationOffset.z);
+            transform.position = posWorld;
+
+            Quaternion targetRot;
 
             if (useSplineTangentRotation)
             {
-                Vector3 forwardDir = tanWorld.sqrMagnitude > 0.000001f ? tanWorld.normalized : transform.forward;
+                Vector3 f = forwardDir;
 
                 if (invertSplineTangent)
                 {
-                    forwardDir = -forwardDir;
+                    f = -f;
                 }
 
-                Vector3 upDir = upWorld.sqrMagnitude > 0.000001f ? upWorld.normalized : Vector3.up;
-
-                targetRotation = Quaternion.LookRotation(forwardDir, upDir) * Quaternion.Euler(splineRotationOffsetEuler);
+                targetRot = Quaternion.LookRotation(f, upDir) * Quaternion.Euler(splineRotationOffsetEuler);
             }
             else
             {
-                targetRotation = Quaternion.Euler(splineFixedRotationEuler);
+                targetRot = Quaternion.Euler(splineFixedRotationEuler);
             }
 
-            rotationTarget = targetRotation;
+            rotationTarget = targetRot;
             StepRotation();
 
             yield return null;
@@ -333,9 +364,9 @@ public class Shooter : MonoBehaviour
 
         IsBusy = false;
 
-        if (onSplineFinished != null)
+        if (onFinished != null)
         {
-            onSplineFinished();
+            onFinished();
         }
     }
 
@@ -519,11 +550,6 @@ public class Shooter : MonoBehaviour
 
     private void ReleaseAllPendingTargets()
     {
-        if (pendingTargets == null)
-        {
-            return;
-        }
-
         foreach (var kv in pendingTargets)
         {
             Block b = kv.Value;
@@ -542,6 +568,8 @@ public class Shooter : MonoBehaviour
         {
             return;
         }
+
+        ReleaseAllPendingTargets();
 
         IsAlive = false;
 
