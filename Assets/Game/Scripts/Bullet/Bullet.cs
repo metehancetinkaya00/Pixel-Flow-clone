@@ -9,9 +9,10 @@ public class Bullet : MonoBehaviour
     public float hitDestroyDuration = 0.12f;
     public float hitDestroyDelay = 0f;
 
+    public float arriveDistance = 0.08f;
+
     private Shooter owner;
     private int lineKey;
-
     private Block targetBlock;
 
     private bool resolved;
@@ -43,17 +44,21 @@ public class Bullet : MonoBehaviour
         }
 
         Vector3 targetPos = targetBlock.transform.position;
-        Vector3 dir = targetPos - transform.position;
+        Vector3 toTarget = targetPos - transform.position;
 
-        if (dir.sqrMagnitude <= 0.000001f)
+        float dist = toTarget.magnitude;
+
+        if (dist <= arriveDistance)
         {
-            Resolve(false);
+            bool success = TryHitTarget();
+            Resolve(success);
             Destroy(gameObject);
             return;
         }
 
-        Vector3 n = dir.normalized;
-        transform.forward = n;
+        Vector3 dir = toTarget / dist;
+
+        transform.forward = dir;
         transform.position = Vector3.MoveTowards(transform.position, targetPos, speed * Time.deltaTime);
     }
 
@@ -75,19 +80,30 @@ public class Bullet : MonoBehaviour
             return;
         }
 
-        bool success = false;
-
-        if (BlockGridManager.Instance != null)
-        {
-            if (!b.IsDying)
-            {
-                BlockGridManager.Instance.DestroyBlockTween(b, hitDestroyDuration, hitDestroyDelay);
-                success = true;
-            }
-        }
-
+        bool success = TryHitTarget();
         Resolve(success);
         Destroy(gameObject);
+    }
+
+    private bool TryHitTarget()
+    {
+        if (targetBlock == null)
+        {
+            return false;
+        }
+
+        if (BlockGridManager.Instance == null)
+        {
+            return false;
+        }
+
+        if (targetBlock.IsDying)
+        {
+            return false;
+        }
+
+        BlockGridManager.Instance.DestroyBlockTween(targetBlock, hitDestroyDuration, hitDestroyDelay);
+        return true;
     }
 
     private void OnDestroy()

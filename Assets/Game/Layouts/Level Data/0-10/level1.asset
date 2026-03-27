@@ -30,7 +30,7 @@ MonoBehaviour:
     depth: 0
   - prefab: {fileID: 1095050957342731678, guid: bf4d6ad0845fa654983947a95508d3c9, type: 3}
     shots: 25
-    groupId: 1
+    groupId: 0
     column: 1
     depth: 0
   - prefab: {fileID: 1095050957342731678, guid: bf4d6ad0845fa654983947a95508d3c9, type: 3}
@@ -60,6 +60,6 @@ MonoBehaviour:
     depth: 3
   - prefab: {fileID: -1692498578803030764, guid: 81334a1f4c9d9ae4ebced9b2540d7071, type: 3}
     shots: 30
-    groupId: 1
+    groupId: 0
     column: 2
     depth: 1

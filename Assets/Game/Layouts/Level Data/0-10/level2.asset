@@ -15,23 +15,66 @@ MonoBehaviour:
   levelId: Level2
   layout: {fileID: 11400000, guid: f9a2a3c7dae37ba42ba07f92d7018cae, type: 2}
   splinePathIndex: 0
-  firstRowSelectableCount: 2
-  shooterGroups:
+  queueLayout:
+    columnCount: 3
+    depthCount: 5
+    origin: {x: 5, y: 0, z: 22}
+    columnStep: {x: 4, y: 0, z: 0}
+    depthStep: {x: 0, y: 0, z: 5}
+    createSlotObjects: 1
+  queuePlacements:
   - prefab: {fileID: -1692498578803030764, guid: e0f6a715b8011ed4abe5798e9a9e2374, type: 3}
-    count: 2
     shots: 30
-  - prefab: {fileID: -1692498578803030764, guid: 2cfcf6c048cce5640a040bf2d842a1f6, type: 3}
-    count: 2
-    shots: 40
+    groupId: 0
+    column: 2
+    depth: 0
   - prefab: {fileID: -1692498578803030764, guid: e0f6a715b8011ed4abe5798e9a9e2374, type: 3}
-    count: 1
-    shots: 48
-  - prefab: {fileID: -1692498578803030764, guid: e0f6a715b8011ed4abe5798e9a9e2374, type: 3}
-    count: 2
     shots: 60
+    groupId: 0
+    column: 2
+    depth: 1
+  - prefab: {fileID: -1692498578803030764, guid: e0f6a715b8011ed4abe5798e9a9e2374, type: 3}
+    shots: 48
+    groupId: 0
+    column: 2
+    depth: 2
+  - prefab: {fileID: -1692498578803030764, guid: e0f6a715b8011ed4abe5798e9a9e2374, type: 3}
+    shots: 30
+    groupId: 0
+    column: 2
+    depth: 3
   - prefab: {fileID: -1692498578803030764, guid: 2cfcf6c048cce5640a040bf2d842a1f6, type: 3}
-    count: 2
-    shots: 36
+    shots: 40
+    groupId: 0
+    column: 1
+    depth: 0
   - prefab: {fileID: -1692498578803030764, guid: 2cfcf6c048cce5640a040bf2d842a1f6, type: 3}
-    count: 1
     shots: 20
+    groupId: 0
+    column: 1
+    depth: 1
+  - prefab: {fileID: -1692498578803030764, guid: 2cfcf6c048cce5640a040bf2d842a1f6, type: 3}
+    shots: 20
+    groupId: 0
+    column: 1
+    depth: 2
+  - prefab: {fileID: -1692498578803030764, guid: 2cfcf6c048cce5640a040bf2d842a1f6, type: 3}
+    shots: 36
+    groupId: 0
+    column: 1
+    depth: 3
+  - prefab: {fileID: -1692498578803030764, guid: e0f6a715b8011ed4abe5798e9a9e2374, type: 3}
+    shots: 60
+    groupId: 0
+    column: 0
+    depth: 0
+  - prefab: {fileID: -1692498578803030764, guid: 2cfcf6c048cce5640a040bf2d842a1f6, type: 3}
+    shots: 40
+    groupId: 0
+    column: 0
+    depth: 1
+  - prefab: {fileID: -1692498578803030764, guid: 2cfcf6c048cce5640a040bf2d842a1f6, type: 3}
+    shots: 16
+    groupId: 0
+    column: 0
+    depth: 2

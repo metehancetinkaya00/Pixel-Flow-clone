@@ -142,8 +142,6 @@ public class Shooter : MonoBehaviour
         seq.Join(transform.DOJump(targetPosition, frontJumpPower, frontJumpNumJumps, frontJumpDuration).SetEase(Ease.OutQuad));
         seq.Join(transform.DORotate(rotateTargetEuler, frontJumpDuration, RotateMode.FastBeyond360).SetEase(Ease.OutQuad));
 
-        seq.SetDelay(0f);
-
         seq.OnComplete(() =>
         {
             if (!IsAlive)
@@ -173,29 +171,12 @@ public class Shooter : MonoBehaviour
 
         destroyWhenNoPending = false;
 
-        if (shootRoutine != null)
-        {
-            StopCoroutine(shootRoutine);
-        }
-
+        StopShooting();
         shootRoutine = StartCoroutine(ShootLoop_LineLockedDepth_Bullet());
 
         SplineContainer container = splinePath.splineContainer;
 
-        if (container == null)
-        {
-            StopShooting();
-            IsBusy = false;
-
-            if (onFinished != null)
-            {
-                onFinished();
-            }
-
-            yield break;
-        }
-
-        if (container.Splines == null || container.Splines.Count == 0)
+        if (container == null || container.Splines == null || container.Splines.Count == 0)
         {
             StopShooting();
             IsBusy = false;
@@ -443,47 +424,40 @@ public class Shooter : MonoBehaviour
                     DestroySelf();
                     yield break;
                 }
+
+                yield return null;
             }
 
-            if (canShoot)
+            if (canShoot && isMoving)
             {
-                if (isMoving)
+                if (BlockGridManager.Instance != null)
                 {
-                    if (BlockGridManager.Instance != null)
+                    int side;
+                    int lineIndex;
+
+                    bool ok = BlockGridManager.Instance.TryResolveShooterLine(transform.position, out side, out lineIndex);
+                    if (ok)
                     {
-                        int side;
-                        int lineIndex;
+                        int lineKey = BlockGridManager.Instance.BuildLineKey(side, lineIndex);
 
-                        bool ok = BlockGridManager.Instance.TryResolveShooterLine(transform.position, out side, out lineIndex);
-                        if (ok)
+                        if (!lockedDepthLines.Contains(lineKey) && !pendingTargets.ContainsKey(lineKey))
                         {
-                            int lineKey = BlockGridManager.Instance.BuildLineKey(side, lineIndex);
+                            Block target;
 
-                            if (!lockedDepthLines.Contains(lineKey))
+                            bool reserved = BlockGridManager.Instance.TryReserveTargetByLine(shooterColor, side, lineIndex, out target);
+                            if (reserved)
                             {
-                                if (!pendingTargets.ContainsKey(lineKey))
+                                bool fired = FireBullet(target, lineKey);
+
+                                if (fired)
                                 {
-                                    if (shotsRemaining > 0)
+                                    pendingTargets[lineKey] = target;
+                                }
+                                else
+                                {
+                                    if (target != null && !target.IsDying)
                                     {
-                                        Block target;
-
-                                        bool reserved = BlockGridManager.Instance.TryReserveTargetByLine(shooterColor, side, lineIndex, out target);
-                                        if (reserved)
-                                        {
-                                            bool fired = FireBullet(target, lineKey);
-
-                                            if (fired)
-                                            {
-                                                pendingTargets[lineKey] = target;
-                                            }
-                                            else
-                                            {
-                                                if (target != null && !target.IsDying)
-                                                {
-                                                    target.IsTargeted = false;
-                                                }
-                                            }
-                                        }
+                                        target.IsTargeted = false;
                                     }
                                 }
                             }
@@ -498,6 +472,11 @@ public class Shooter : MonoBehaviour
 
     private bool FireBullet(Block targetBlock, int lineKey)
     {
+        if (shotsRemaining <= 0)
+        {
+            return false;
+        }
+
         if (bulletPrefab == null)
         {
             return false;

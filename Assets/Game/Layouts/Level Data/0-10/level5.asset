@@ -15,32 +15,101 @@ MonoBehaviour:
   levelId: Level5
   layout: {fileID: 11400000, guid: 6136baeab804bc14cbef00e9b633096b, type: 2}
   splinePathIndex: 0
-  firstRowSelectableCount: 2
-  shooterGroups:
+  queueLayout:
+    columnCount: 4
+    depthCount: 10
+    origin: {x: 3, y: 0, z: 22}
+    columnStep: {x: 4, y: 0, z: 0}
+    depthStep: {x: 0, y: 0, z: 5}
+    createSlotObjects: 0
+  queuePlacements:
   - prefab: {fileID: -1692498578803030764, guid: 7b5580446bd14bb4284241b89c9c92c4, type: 3}
-    count: 2
-    shots: 20
-  - prefab: {fileID: -1692498578803030764, guid: e0f6a715b8011ed4abe5798e9a9e2374, type: 3}
-    count: 1
     shots: 30
+    groupId: 0
+    column: 0
+    depth: 0
   - prefab: {fileID: 5059570994964575050, guid: 4c9dfc315207d1a42873c1cf4f59766e, type: 3}
-    count: 2
+    shots: 30
+    groupId: 0
+    column: 0
+    depth: 1
+  - prefab: {fileID: -1692498578803030764, guid: 7b5580446bd14bb4284241b89c9c92c4, type: 3}
+    shots: 30
+    groupId: 0
+    column: 0
+    depth: 2
+  - prefab: {fileID: -1692498578803030764, guid: e0f6a715b8011ed4abe5798e9a9e2374, type: 3}
+    shots: 25
+    groupId: 0
+    column: 0
+    depth: 3
+  - prefab: {fileID: -1692498578803030764, guid: 7b5580446bd14bb4284241b89c9c92c4, type: 3}
+    shots: 26
+    groupId: 0
+    column: 0
+    depth: 4
+  - prefab: {fileID: 5059570994964575050, guid: 4c9dfc315207d1a42873c1cf4f59766e, type: 3}
+    shots: 45
+    groupId: 0
+    column: 1
+    depth: 0
+  - prefab: {fileID: -1692498578803030764, guid: e0f6a715b8011ed4abe5798e9a9e2374, type: 3}
+    shots: 30
+    groupId: 0
+    column: 1
+    depth: 1
+  - prefab: {fileID: 5059570994964575050, guid: 4c9dfc315207d1a42873c1cf4f59766e, type: 3}
     shots: 40
+    groupId: 0
+    column: 1
+    depth: 2
   - prefab: {fileID: -1692498578803030764, guid: 7b5580446bd14bb4284241b89c9c92c4, type: 3}
-    count: 2
-    shots: 55
+    shots: 26
+    groupId: 0
+    column: 1
+    depth: 3
+  - prefab: {fileID: -1692498578803030764, guid: 7b5580446bd14bb4284241b89c9c92c4, type: 3}
+    shots: 30
+    groupId: 0
+    column: 2
+    depth: 0
   - prefab: {fileID: 5059570994964575050, guid: 4c9dfc315207d1a42873c1cf4f59766e, type: 3}
-    count: 1
     shots: 30
-  - prefab: {fileID: -1692498578803030764, guid: e0f6a715b8011ed4abe5798e9a9e2374, type: 3}
-    count: 2
-    shots: 30
+    groupId: 0
+    column: 2
+    depth: 1
   - prefab: {fileID: -1692498578803030764, guid: 7b5580446bd14bb4284241b89c9c92c4, type: 3}
-    count: 2
-    shots: 60
-  - prefab: {fileID: -1692498578803030764, guid: e0f6a715b8011ed4abe5798e9a9e2374, type: 3}
-    count: 1
     shots: 20
+    groupId: 0
+    column: 2
+    depth: 2
   - prefab: {fileID: 5059570994964575050, guid: 4c9dfc315207d1a42873c1cf4f59766e, type: 3}
-    count: 1
-    shots: 60
+    shots: 25
+    groupId: 0
+    column: 2
+    depth: 3
+  - prefab: {fileID: -1692498578803030764, guid: e0f6a715b8011ed4abe5798e9a9e2374, type: 3}
+    shots: 25
+    groupId: 0
+    column: 2
+    depth: 4
+  - prefab: {fileID: -1692498578803030764, guid: 7b5580446bd14bb4284241b89c9c92c4, type: 3}
+    shots: 38
+    groupId: 0
+    column: 2
+    depth: 5
+  - prefab: {fileID: -1692498578803030764, guid: e0f6a715b8011ed4abe5798e9a9e2374, type: 3}
+    shots: 30
+    groupId: 0
+    column: 3
+    depth: 0
+  - prefab: {fileID: -1692498578803030764, guid: 7b5580446bd14bb4284241b89c9c92c4, type: 3}
+    shots: 25
+    groupId: 0
+    column: 3
+    depth: 1
+  - prefab: {fileID: -1692498578803030764, guid: 7b5580446bd14bb4284241b89c9c92c4, type: 3}
+    shots: 45
+    groupId: 0
+    column: 3
+    depth: 2
