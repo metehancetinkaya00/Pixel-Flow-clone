@@ -495,13 +495,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 195200177}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 1, z: 0, w: 0}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 6, y: 0, z: -7}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 180, z: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &222091110
 GameObject:
   m_ObjectHideFlags: 0
@@ -1484,12 +1484,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 20c8d0691e36bd04e95091419ace1e46, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ShooterLinkVisualizer
-  lineMaterial: {fileID: 2100000, guid: d3f2e598208039a4ba47af34585cabd9, type: 2}
-  lineWidth: 0.06
+  lineMaterial: {fileID: 2100000, guid: 263cecb2c38edd7498e43061c08ac260, type: 2}
+  lineWidth: 0.2
   shooterPointOffset: {x: 0, y: 0.15, z: 0}
-  hubOffset: {x: 0, y: 0.05, z: 0}
-  showHub: 0
-  hubSphereScale: 0.12
 --- !u!4 &485729268
 Transform:
   m_ObjectHideFlags: 0
@@ -3794,7 +3791,7 @@ MonoBehaviour:
   - {fileID: 1597557322}
   defaultSplinePath: {fileID: 1292444190}
   queueMoveDuration: 1
-  groupSideSpacing: 0.6
+  groupSideSpacing: 3
 --- !u!4 &1614747628
 Transform:
   m_ObjectHideFlags: 0

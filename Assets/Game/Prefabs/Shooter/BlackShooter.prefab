@@ -1800,6 +1800,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 58823c5d78eae944b80787d8e67db79b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Shooter
+  linkColor: {r: 0.13962269, g: 0.12407978, b: 0.12407978, a: 1}
   shooterColor: 6
   linkGroupId: -1
   IsBusy: 0

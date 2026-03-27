@@ -6,18 +6,20 @@ public class ShooterLinkVisualizer : MonoBehaviour
     public Material lineMaterial;
     public float lineWidth = 0.06f;
     public Vector3 shooterPointOffset = new Vector3(0f, 0.15f, 0f);
-    public Vector3 hubOffset = new Vector3(0f, 0.05f, 0f);
-    public bool showHub = false;
-    public float hubSphereScale = 0.12f;
 
     private readonly Dictionary<int, List<Shooter>> groups = new Dictionary<int, List<Shooter>>();
-    private readonly Dictionary<int, List<LineRenderer>> groupLines = new Dictionary<int, List<LineRenderer>>();
-    private readonly Dictionary<int, GameObject> hubObjects = new Dictionary<int, GameObject>();
+    private readonly Dictionary<int, List<LinkPair>> groupLinks = new Dictionary<int, List<LinkPair>>();
+
+    private class LinkPair
+    {
+        public LineRenderer firstHalf;
+        public LineRenderer secondHalf;
+    }
 
     private void LateUpdate()
     {
         RebuildGroups();
-        UpdateLines();
+        UpdateLinks();
     }
 
     private void RebuildGroups()
@@ -29,12 +31,7 @@ public class ShooterLinkVisualizer : MonoBehaviour
         for (int i = 0; i < shooters.Length; i++)
         {
             Shooter s = shooters[i];
-            if (s == null)
-            {
-                continue;
-            }
-
-            if (!s.IsAlive)
+            if (s == null || !s.IsAlive)
             {
                 continue;
             }
@@ -54,16 +51,16 @@ public class ShooterLinkVisualizer : MonoBehaviour
         }
     }
 
-    private void UpdateLines()
+    private void UpdateLinks()
     {
-        List<int> existingKeys = new List<int>(groupLines.Keys);
+        List<int> existingKeys = new List<int>(groupLinks.Keys);
 
         for (int i = 0; i < existingKeys.Count; i++)
         {
-            int k = existingKeys[i];
-            if (!groups.ContainsKey(k))
+            int gid = existingKeys[i];
+            if (!groups.ContainsKey(gid))
             {
-                DisableGroup(k);
+                DisableGroup(gid);
             }
         }
 
@@ -78,160 +75,141 @@ public class ShooterLinkVisualizer : MonoBehaviour
                 continue;
             }
 
-            Vector3 hub = ComputeHub(members);
+            SortMembersForStableLinks(members);
 
-            EnsureGroupLines(gid, members.Count);
+            int neededLinkCount = members.Count - 1;
+            EnsureGroupLinks(gid, neededLinkCount);
 
-            List<LineRenderer> lines = groupLines[gid];
+            List<LinkPair> links = groupLinks[gid];
 
-            for (int i = 0; i < lines.Count; i++)
+            for (int i = 0; i < links.Count; i++)
             {
-                LineRenderer lr = lines[i];
-                if (lr == null)
+                bool shouldEnable = i < neededLinkCount;
+
+                if (!shouldEnable)
                 {
+                    SetPairEnabled(links[i], false);
                     continue;
                 }
 
-                Shooter s = members[i];
-                if (s == null)
+                Shooter a = members[i];
+                Shooter b = members[i + 1];
+
+                if (a == null || b == null)
                 {
-                    lr.enabled = false;
+                    SetPairEnabled(links[i], false);
                     continue;
                 }
 
-                lr.enabled = true;
+                Vector3 p0 = a.transform.position + shooterPointOffset;
+                Vector3 p1 = b.transform.position + shooterPointOffset;
+                Vector3 mid = (p0 + p1) * 0.5f;
 
-                Vector3 p0 = s.transform.position + shooterPointOffset;
-                Vector3 p1 = hub;
+                LinkPair pair = links[i];
+                SetPairEnabled(pair, true);
 
-                lr.positionCount = 2;
-                lr.SetPosition(0, p0);
-                lr.SetPosition(1, p1);
+                SetupHalf(pair.firstHalf, p0, mid, a.linkColor);
+                SetupHalf(pair.secondHalf, mid, p1, b.linkColor);
             }
-
-            UpdateHubObject(gid, hub);
         }
     }
 
-    private Vector3 ComputeHub(List<Shooter> members)
+    private void SortMembersForStableLinks(List<Shooter> members)
     {
-        Vector3 sum = Vector3.zero;
-        int count = 0;
-
-        for (int i = 0; i < members.Count; i++)
+        members.Sort((a, b) =>
         {
-            Shooter s = members[i];
-            if (s == null)
-            {
-                continue;
-            }
+            if (a == null && b == null) return 0;
+            if (a == null) return 1;
+            if (b == null) return -1;
 
-            sum += (s.transform.position + shooterPointOffset);
-            count += 1;
-        }
-
-        if (count <= 0)
-        {
-            return transform.position;
-        }
-
-        Vector3 hub = (sum / count) + hubOffset;
-        return hub;
+            return a.transform.position.x.CompareTo(b.transform.position.x);
+        });
     }
 
-    private void EnsureGroupLines(int gid, int needed)
+    private void EnsureGroupLinks(int gid, int needed)
     {
-        if (!groupLines.ContainsKey(gid))
+        if (!groupLinks.ContainsKey(gid))
         {
-            groupLines[gid] = new List<LineRenderer>();
+            groupLinks[gid] = new List<LinkPair>();
         }
 
-        List<LineRenderer> list = groupLines[gid];
+        List<LinkPair> list = groupLinks[gid];
 
         while (list.Count < needed)
         {
-            GameObject go = new GameObject("LinkLine_" + gid.ToString() + "_" + list.Count.ToString());
-            go.transform.SetParent(transform);
-
-            LineRenderer lr = go.AddComponent<LineRenderer>();
-            lr.useWorldSpace = true;
-            lr.material = lineMaterial;
-            lr.startWidth = lineWidth;
-            lr.endWidth = lineWidth;
-            lr.numCapVertices = 6;
-            lr.numCornerVertices = 2;
-            lr.positionCount = 2;
-            lr.enabled = false;
-
-            list.Add(lr);
+            LinkPair pair = new LinkPair();
+            pair.firstHalf = CreateLineRenderer("LinkLine_" + gid + "_" + list.Count + "_A");
+            pair.secondHalf = CreateLineRenderer("LinkLine_" + gid + "_" + list.Count + "_B");
+            list.Add(pair);
         }
 
         for (int i = needed; i < list.Count; i++)
         {
-            if (list[i] != null)
-            {
-                list[i].enabled = false;
-            }
+            SetPairEnabled(list[i], false);
+        }
+    }
+
+    private LineRenderer CreateLineRenderer(string objName)
+    {
+        GameObject go = new GameObject(objName);
+        go.transform.SetParent(transform);
+
+        LineRenderer lr = go.AddComponent<LineRenderer>();
+        lr.useWorldSpace = true;
+        lr.material = lineMaterial;
+        lr.startWidth = lineWidth;
+        lr.endWidth = lineWidth;
+        lr.numCapVertices = 6;
+        lr.numCornerVertices = 2;
+        lr.positionCount = 2;
+        lr.enabled = false;
+
+        return lr;
+    }
+
+    private void SetupHalf(LineRenderer lr, Vector3 start, Vector3 end, Color color)
+    {
+        if (lr == null)
+        {
+            return;
+        }
+
+        lr.positionCount = 2;
+        lr.SetPosition(0, start);
+        lr.SetPosition(1, end);
+        lr.startColor = color;
+        lr.endColor = color;
+    }
+
+    private void SetPairEnabled(LinkPair pair, bool enabled)
+    {
+        if (pair == null)
+        {
+            return;
+        }
+
+        if (pair.firstHalf != null)
+        {
+            pair.firstHalf.enabled = enabled;
+        }
+
+        if (pair.secondHalf != null)
+        {
+            pair.secondHalf.enabled = enabled;
         }
     }
 
     private void DisableGroup(int gid)
     {
-        if (groupLines.ContainsKey(gid))
+        if (!groupLinks.ContainsKey(gid))
         {
-            List<LineRenderer> list = groupLines[gid];
-
-            for (int i = 0; i < list.Count; i++)
-            {
-                if (list[i] != null)
-                {
-                    list[i].enabled = false;
-                }
-            }
-        }
-
-        if (hubObjects.ContainsKey(gid))
-        {
-            if (hubObjects[gid] != null)
-            {
-                hubObjects[gid].SetActive(false);
-            }
-        }
-    }
-
-    private void UpdateHubObject(int gid, Vector3 hubPos)
-    {
-        if (!showHub)
-        {
-            if (hubObjects.ContainsKey(gid))
-            {
-                if (hubObjects[gid] != null)
-                {
-                    hubObjects[gid].SetActive(false);
-                }
-            }
-
             return;
         }
 
-        if (!hubObjects.ContainsKey(gid) || hubObjects[gid] == null)
+        List<LinkPair> list = groupLinks[gid];
+        for (int i = 0; i < list.Count; i++)
         {
-            GameObject hub = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            hub.name = "LinkHub_" + gid.ToString();
-            hub.transform.SetParent(transform);
-            hub.transform.localScale = Vector3.one * hubSphereScale;
-
-            Collider c = hub.GetComponent<Collider>();
-            if (c != null)
-            {
-                c.enabled = false;
-            }
-
-            hubObjects[gid] = hub;
+            SetPairEnabled(list[i], false);
         }
-
-        GameObject obj = hubObjects[gid];
-        obj.SetActive(true);
-        obj.transform.position = hubPos;
     }
 }

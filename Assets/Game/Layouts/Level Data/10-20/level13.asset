@@ -12,35 +12,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c497bebd6a28363409fc89950966f717, type: 3}
   m_Name: level13
   m_EditorClassIdentifier: Assembly-CSharp::LevelData
-  levelId: Level10
-  layout: {fileID: 11400000, guid: 859864a48ab3b6141b421f7e5162ec0b, type: 2}
+  levelId: Level13
+  layout: {fileID: 11400000, guid: 857aa4d568e73be45bf1989bf366ed3e, type: 2}
   splinePathIndex: 0
-  firstRowSelectableCount: 2
-  shooterGroups:
-  - prefab: {fileID: -1692498578803030764, guid: f424af16fe13f904c94e66ef37374c51, type: 3}
-    count: 1
-    shots: 25
-  - prefab: {fileID: -1692498578803030764, guid: 73bd46513650a0e40869fc3769657ed7, type: 3}
-    count: 1
-    shots: 30
-  - prefab: {fileID: 5059570994964575050, guid: 4c9dfc315207d1a42873c1cf4f59766e, type: 3}
-    count: 2
-    shots: 19
-  - prefab: {fileID: -1692498578803030764, guid: 7b5580446bd14bb4284241b89c9c92c4, type: 3}
-    count: 1
-    shots: 30
-  - prefab: {fileID: -1692498578803030764, guid: 73bd46513650a0e40869fc3769657ed7, type: 3}
-    count: 1
-    shots: 22
-  - prefab: {fileID: -1692498578803030764, guid: f424af16fe13f904c94e66ef37374c51, type: 3}
-    count: 1
-    shots: 22
-  - prefab: {fileID: -1692498578803030764, guid: 78307a65b043bd14abccf96ce82762e9, type: 3}
-    count: 1
-    shots: 28
-  - prefab: {fileID: -1692498578803030764, guid: f424af16fe13f904c94e66ef37374c51, type: 3}
-    count: 1
-    shots: 15
-  - prefab: {fileID: 1095050957342731678, guid: bf4d6ad0845fa654983947a95508d3c9, type: 3}
-    count: 1
-    shots: 20
+  queueLayout:
+    columnCount: 0
+    depthCount: 0
+    origin: {x: 0, y: 0, z: 0}
+    columnStep: {x: 0, y: 0, z: 0}
+    depthStep: {x: 0, y: 0, z: 0}
+    createSlotObjects: 0
+  queuePlacements: []

@@ -49,21 +49,21 @@ public class ShooterQueueManager : MonoBehaviour
 
     public void ApplyLayout(QueueLayoutSettings settings)
     {
-        int c = settings.columnCount;
-        int d = settings.depthCount;
+        int colcount = settings.columnCount;
+        int deptcount = settings.depthCount;
 
-        if (c < 1)
+        if (colcount < 1)
         {
-            c = 1;
+            colcount = 1;
         }
 
-        if (d < 1)
+        if (deptcount < 1)
         {
-            d = 1;
+            deptcount = 1;
         }
 
-        columns = c;
-        depthCount = d;
+        columns = colcount;
+        depthCount = deptcount;
 
         if (runtimeQueueRoot == null)
         {
@@ -314,7 +314,7 @@ public class ShooterQueueManager : MonoBehaviour
             int slotIndex = startFront + i;
 
             float x = (i - center) * groupSideSpacing;
-            Vector3 offset = new Vector3(x, 0f, 0f);
+            Vector3 offset = new Vector3(0f, 0f, x);
 
             s.StartMoveOnSpline(defaultSplinePath, offset, () =>
             {

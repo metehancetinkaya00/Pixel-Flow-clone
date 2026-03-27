@@ -9,6 +9,11 @@ using Unity.Mathematics;
 [RequireComponent(typeof(Collider))]
 public class Shooter : MonoBehaviour
 {
+    private Vector3 formationOffset;
+    public Vector3 FormationOffset => formationOffset;
+    [Header("Visual")]
+    public Color linkColor = Color.white;
+
     public BlockColor shooterColor;
 
     public int linkGroupId = 0;
@@ -62,7 +67,7 @@ public class Shooter : MonoBehaviour
     private bool destroyWhenNoPending;
 
     private Quaternion rotationTarget;
-    private Vector3 formationOffset;
+   
 
     private void Awake()
     {
