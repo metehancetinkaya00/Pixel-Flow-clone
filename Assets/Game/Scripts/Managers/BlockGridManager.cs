@@ -42,7 +42,7 @@ public class BlockGridManager : MonoBehaviour
             return new Bounds(gridCenterWorld, new Vector3(gridWorldSizeX, 5f, gridWorldSizeZ));
         }
     }
-
+   
     private void Awake()
     {
         Instance = this;
@@ -290,7 +290,7 @@ public class BlockGridManager : MonoBehaviour
             return false;
         }
 
-        RecalcGridMetrics();
+      // RecalcGridMetrics();
 
         Bounds boundss = GridBounds;
 
@@ -421,53 +421,7 @@ public class BlockGridManager : MonoBehaviour
         return true;
     }
 
-    public bool TryGetTargetByLine(BlockColor shooterColor, int side, int lineIndex, out Block target)
-    {
-        target = null;
-
-        if (layout == null || gridBlocks == null)
-        {
-            return false;
-        }
-
-        Block candidate = null;
-
-        if (side == 0)
-        {
-            candidate = FindFirstBlockInRowFromLeft(lineIndex);
-        }
-        else if (side == 1)
-        {
-            candidate = FindFirstBlockInRowFromRight(lineIndex);
-        }
-        else if (side == 2)
-        {
-            candidate = FindFirstBlockInColumnFromBottom(lineIndex);
-        }
-        else if (side == 3)
-        {
-            candidate = FindFirstBlockInColumnFromTop(lineIndex);
-        }
-
-        if (candidate == null)
-        {
-            return false;
-        }
-
-        if (candidate.IsDying || candidate.IsTargeted)
-        {
-            return false;
-        }
-
-        if (candidate.color != shooterColor)
-        {
-            return false;
-        }
-
-        target = candidate;
-        return true;
-    }
-
+  
     private Block FindFirstBlockInRowFromLeft(int zIndex)
     {
         if (zIndex < 0 || zIndex >= layout.height)

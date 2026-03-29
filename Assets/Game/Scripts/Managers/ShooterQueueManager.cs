@@ -37,7 +37,6 @@ public class ShooterQueueManager : MonoBehaviour
 
     private Shooter[,] queueGrid;
 
-    private readonly List<Shooter> frontList = new List<Shooter>();
     private Shooter[] frontOccupants;
     private Dictionary<Shooter, int> frontIndexMap = new Dictionary<Shooter, int>();
 
@@ -187,7 +186,7 @@ public class ShooterQueueManager : MonoBehaviour
         EnsureFrontOccupantsSize();
 
         bool inQueue = TryFindInQueue(clicked, out int col, out int dep);
-        bool inFront = frontList.Contains(clicked);
+        bool inFront = frontIndexMap.ContainsKey(clicked);
 
         if (!inQueue && !inFront)
         {
@@ -281,29 +280,18 @@ public class ShooterQueueManager : MonoBehaviour
             return;
         }
 
-        HashSet<int> touchedCols = new HashSet<int>();
-
         for (int i = 0; i < members.Count; i++)
         {
             Shooter s = members[i].shooter;
             int slotIndex = startFront + i;
 
             ReserveFrontSlot(s, slotIndex);
-
-            if (!touchedCols.Contains(members[i].col))
-            {
-                touchedCols.Add(members[i].col);
-            }
         }
 
         for (int i = 0; i < members.Count; i++)
         {
             PopHeadFromColumn(members[i].col);
-        }
-
-        foreach (int c in touchedCols)
-        {
-            AnimateColumn(c);
+            AnimateColumn(members[i].col);
         }
 
         float center = (needed - 1) * 0.5f;
@@ -410,11 +398,6 @@ public class ShooterQueueManager : MonoBehaviour
         {
             RemoveAtAndCompact(col, dep);
             AnimateColumn(col);
-        }
-
-        if (frontList.Contains(shooter))
-        {
-            frontList.Remove(shooter);
         }
 
         FreeFrontReservation(shooter);
@@ -633,21 +616,16 @@ public class ShooterQueueManager : MonoBehaviour
 
         frontOccupants[index] = shooter;
         frontIndexMap[shooter] = index;
-
-        if (!frontList.Contains(shooter))
-        {
-            frontList.Add(shooter);
-        }
     }
 
     private int GetOrReserveFrontIndex(Shooter shooter)
     {
-        if (frontIndexMap.ContainsKey(shooter))
+        if (frontIndexMap.TryGetValue(shooter, out int idx))
         {
-            return frontIndexMap[shooter];
+            return idx;
         }
 
-        int idx = GetFirstEmptyFrontSlotIndex();
+        idx = GetFirstEmptyFrontSlotIndex();
         if (idx < 0)
         {
             return -1;
@@ -664,10 +642,8 @@ public class ShooterQueueManager : MonoBehaviour
             return;
         }
 
-        if (frontIndexMap.ContainsKey(shooter))
+        if (frontIndexMap.TryGetValue(shooter, out int idx))
         {
-            int idx = frontIndexMap[shooter];
-
             if (idx >= 0 && idx < frontOccupants.Length)
             {
                 if (frontOccupants[idx] == shooter)

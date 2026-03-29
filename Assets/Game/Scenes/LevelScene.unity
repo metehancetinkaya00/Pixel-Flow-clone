@@ -3791,7 +3791,7 @@ MonoBehaviour:
   - {fileID: 1597557322}
   defaultSplinePath: {fileID: 1292444190}
   queueMoveDuration: 1
-  groupSideSpacing: 3
+  groupSideSpacing: 5
 --- !u!4 &1614747628
 Transform:
   m_ObjectHideFlags: 0

@@ -43,10 +43,7 @@ public class LevelFlowManager : MonoBehaviour
         int currentSaved = PlayerPrefs.GetInt("level_index", startLevelIndex);
         int nextIndex = currentLevelIndex + 1;
 
-        if (nextIndex < 0)
-        {
-            nextIndex = 0;
-        }
+      
 
         if (database != null && database.levels != null && database.levels.Length > 0)
         {
@@ -164,7 +161,7 @@ public class LevelFlowManager : MonoBehaviour
 
         List<ShooterQueueManager.SpawnedPlacement> placements = new List<ShooterQueueManager.SpawnedPlacement>();
 
-        if (data != null && data.queuePlacements != null)
+        if (data.queuePlacements != null)
         {
             for (int i = 0; i < data.queuePlacements.Length; i++)
             {
@@ -177,13 +174,9 @@ public class LevelFlowManager : MonoBehaviour
 
                 Shooter inst = Instantiate(p.prefab, spawnPos, p.prefab.transform.rotation);
 
-                int shots = p.shots;
-                if (shots < 0)
-                {
-                    shots = 0;
-                }
+                
 
-                inst.ApplyShots(shots);
+                inst.ApplyShots(p.shots);
 
                 inst.linkGroupId = p.groupId > 0 ? p.groupId : 0;
 
