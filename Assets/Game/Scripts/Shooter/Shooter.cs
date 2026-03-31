@@ -82,10 +82,15 @@ public class Shooter : MonoBehaviour
 
     public void StartMoveOnSpline(SplinePathDefinition splinePath, System.Action onFinished)
     {
-        StartMoveOnSpline(splinePath, Vector3.zero, onFinished);
+        StartMoveOnSpline(splinePath, Vector3.zero, null, onFinished);
     }
 
     public void StartMoveOnSpline(SplinePathDefinition splinePath, Vector3 offset, System.Action onFinished)
+    {
+        StartMoveOnSpline(splinePath, offset, null, onFinished);
+    }
+
+    public void StartMoveOnSpline(SplinePathDefinition splinePath, Vector3 offset, System.Action onReachedSplineStart, System.Action onFinished)
     {
         if (!IsAlive || IsBusy)
         {
@@ -111,7 +116,7 @@ public class Shooter : MonoBehaviour
             StopCoroutine(moveRoutine);
         }
 
-        moveRoutine = StartCoroutine(MoveAlongSpline(splinePath, onFinished));
+        moveRoutine = StartCoroutine(MoveAlongSpline(splinePath, onReachedSplineStart, onFinished));
     }
 
     public void JumpToFrontSlot(Vector3 targetPosition, System.Action onFinished)
@@ -144,7 +149,35 @@ public class Shooter : MonoBehaviour
         });
     }
 
-    private IEnumerator MoveAlongSpline(SplinePathDefinition splinePath, System.Action onFinished)
+    public void ShiftToFrontSlot(Vector3 targetPosition, System.Action onFinished)
+    {
+        if (!IsAlive)
+        {
+            return;
+        }
+
+        IsBusy = true;
+        DOTween.Kill(transform);
+
+        Quaternion currentRotation = transform.rotation;
+
+        transform.DOJump(targetPosition, frontJumpPower, frontJumpNumJumps, frontJumpDuration)
+            .SetEase(Ease.OutQuad)
+            .OnComplete(() =>
+            {
+                if (!IsAlive)
+                {
+                    return;
+                }
+
+                transform.position = targetPosition;
+                transform.rotation = currentRotation;
+                IsBusy = false;
+                onFinished?.Invoke();
+            });
+    }
+
+    private IEnumerator MoveAlongSpline(SplinePathDefinition splinePath, System.Action onReachedSplineStart, System.Action onFinished)
     {
         canShoot = false;
         isMoving = false;
@@ -154,7 +187,7 @@ public class Shooter : MonoBehaviour
         ReleaseAllPendingTargets();
 
         StopShooting();
-        shootRoutine = StartCoroutine(ShootLoop_LineLockedDepth_Bullet());
+        shootRoutine = StartCoroutine(ShootLoop());
 
         SplineContainer container = splinePath.splineContainer;
         if (container == null || container.Splines == null || container.Splines.Count == 0)
@@ -221,6 +254,7 @@ public class Shooter : MonoBehaviour
 
         transform.position = startWorld;
         transform.rotation = jumpEndRotation;
+        onReachedSplineStart?.Invoke();
         canShoot = true;
 
         if (splineLength <= 0.0001f)
@@ -342,7 +376,7 @@ public class Shooter : MonoBehaviour
         }
     }
 
-    private IEnumerator ShootLoop_LineLockedDepth_Bullet()
+    private IEnumerator ShootLoop()
     {
         while (true)
         {

@@ -1,20 +1,33 @@
 using UnityEngine;
 using System.Collections.Generic;
 using DG.Tweening;
+using UnityEngine.Splines;
+using Unity.Mathematics;
 
 public class ShooterQueueManager : MonoBehaviour
 {
     public static ShooterQueueManager Instance;
 
+    [Header("Queue")]
     public Transform runtimeQueueRoot;
-
     public Transform[] frontSlots;
-
     public SplinePathDefinition defaultSplinePath;
-
     public float queueMoveDuration = 0.15f;
-
     public float groupSideSpacing = 0.6f;
+
+    [Header("Plates")]
+    public GameObject platePrefab;
+    public int plateCount = 4;
+    public Transform plateLineRoot;
+    public Vector3 plateLineOrigin = Vector3.zero;
+    public Vector3 plateLineStep = new Vector3(0.8f, 0f, 0f);
+    public Vector3 plateLineRotationEuler = Vector3.zero;
+    public Vector3 plateChildLocalOffset = new Vector3(0f, -1f, 0f);
+    public Vector3 plateChildLocalRotationEuler = Vector3.zero;
+    public float plateMoveDuration = 0.2f;
+    public float plateAttachDuration = 0.1f;
+    public Vector3 platePickupSpinEuler = new Vector3(0f, 360f, 0f);
+    public Vector3 plateReturnSpinEuler = new Vector3(0f, 360f, 0f);
 
     public struct SpawnedPlacement
     {
@@ -23,51 +36,46 @@ public class ShooterQueueManager : MonoBehaviour
         public int depth;
     }
 
-    private struct GroupMember
+    private struct QueueGroupMember
     {
         public Shooter shooter;
-        public int col;
+        public int column;
         public int depth;
     }
 
-    private Transform[][] slotMatrix;
+    private struct FrontGroupMember
+    {
+        public Shooter shooter;
+        public int slotIndex;
+    }
 
+    private Transform[][] slotMatrix;
     private int columns;
     private int depthCount;
 
     private Shooter[,] queueGrid;
+    private Shooter[] frontShooters;
+    private readonly Dictionary<Shooter, int> frontSlotLookup = new Dictionary<Shooter, int>();
 
-    private Shooter[] frontOccupants;
-    private Dictionary<Shooter, int> frontIndexMap = new Dictionary<Shooter, int>();
+    private readonly List<ShootersPlate> plateStack = new List<ShootersPlate>();
+    private readonly Dictionary<Shooter, ShootersPlate> shooterPlateMap = new Dictionary<Shooter, ShootersPlate>();
+    private readonly HashSet<ShootersPlate> blockedPlates = new HashSet<ShootersPlate>();
+    private Transform[] plateSlots;
 
     private void Awake()
     {
         Instance = this;
-        EnsureFrontOccupantsSize();
+        EnsureFrontSlots();
     }
 
     public void ApplyLayout(QueueLayoutSettings settings)
     {
-        int colcount = settings.columnCount;
-        int deptcount = settings.depthCount;
-
-        if (colcount < 1)
-        {
-            colcount = 1;
-        }
-
-        if (deptcount < 1)
-        {
-            deptcount = 1;
-        }
-
-        columns = colcount;
-        depthCount = deptcount;
+        columns = Mathf.Max(1, settings.columnCount);
+        depthCount = Mathf.Max(1, settings.depthCount);
 
         if (runtimeQueueRoot == null)
         {
-            GameObject go = new GameObject("QueueSlotsRuntime");
-            runtimeQueueRoot = go.transform;
+            runtimeQueueRoot = new GameObject("QueueSlotsRuntime").transform;
         }
 
         if (settings.createSlotObjects)
@@ -77,27 +85,27 @@ public class ShooterQueueManager : MonoBehaviour
 
         slotMatrix = new Transform[columns][];
 
-        for (int col = 0; col < columns; col++)
+        for (int column = 0; column < columns; column++)
         {
-            slotMatrix[col] = new Transform[depthCount];
+            slotMatrix[column] = new Transform[depthCount];
 
-            for (int dep = 0; dep < depthCount; dep++)
+            for (int depth = 0; depth < depthCount; depth++)
             {
-                Vector3 pos = settings.origin + (settings.columnStep * col) + (settings.depthStep * dep);
+                Vector3 position = settings.origin + (settings.columnStep * column) + (settings.depthStep * depth);
 
                 if (settings.createSlotObjects)
                 {
-                    GameObject sgo = new GameObject("Q_" + col.ToString() + "_" + dep.ToString());
-                    sgo.transform.SetParent(runtimeQueueRoot);
-                    sgo.transform.position = pos;
-                    slotMatrix[col][dep] = sgo.transform;
+                    GameObject slotObject = new GameObject("Q_" + column + "_" + depth);
+                    slotObject.transform.SetParent(runtimeQueueRoot);
+                    slotObject.transform.position = position;
+                    slotMatrix[column][depth] = slotObject.transform;
                 }
                 else
                 {
-                    GameObject sgo = new GameObject();
-                    sgo.hideFlags = HideFlags.HideAndDontSave;
-                    sgo.transform.position = pos;
-                    slotMatrix[col][dep] = sgo.transform;
+                    GameObject slotObject = new GameObject();
+                    slotObject.hideFlags = HideFlags.HideAndDontSave;
+                    slotObject.transform.position = position;
+                    slotMatrix[column][depth] = slotObject.transform;
                 }
             }
         }
@@ -107,31 +115,34 @@ public class ShooterQueueManager : MonoBehaviour
 
     public Vector3 GetQueueSpawnPosition()
     {
-        Transform t = GetSlot(0, 0);
-        if (t == null)
-        {
-            return Vector3.zero;
-        }
-
-        return t.position;
+        Transform slot = GetSlot(0, 0);
+        return slot != null ? slot.position : Vector3.zero;
     }
 
     public void InitializeQueueFromPlacements(List<SpawnedPlacement> placements)
     {
-        EnsureFrontOccupantsSize();
+        EnsureFrontSlots();
 
         if (queueGrid == null || slotMatrix == null)
         {
             return;
         }
 
-        for (int c = 0; c < columns; c++)
+        for (int column = 0; column < columns; column++)
         {
-            for (int d = 0; d < depthCount; d++)
+            for (int depth = 0; depth < depthCount; depth++)
             {
-                queueGrid[c, d] = null;
+                queueGrid[column, depth] = null;
             }
         }
+
+        for (int i = 0; i < frontShooters.Length; i++)
+        {
+            frontShooters[i] = null;
+        }
+
+        frontSlotLookup.Clear();
+        RebuildPlateLine();
 
         if (placements == null)
         {
@@ -141,21 +152,16 @@ public class ShooterQueueManager : MonoBehaviour
 
         for (int i = 0; i < placements.Count; i++)
         {
-            Shooter s = placements[i].shooter;
-            int col = placements[i].column;
-            int dep = placements[i].depth;
+            Shooter shooter = placements[i].shooter;
+            int column = placements[i].column;
+            int depth = placements[i].depth;
 
-            if (s == null)
+            if (shooter == null || !IsValidSlot(column, depth))
             {
                 continue;
             }
 
-            if (!IsValidSlot(col, dep))
-            {
-                continue;
-            }
-
-            queueGrid[col, dep] = s;
+            queueGrid[column, depth] = shooter;
         }
 
         SnapAll();
@@ -163,17 +169,7 @@ public class ShooterQueueManager : MonoBehaviour
 
     public void TryActivateShooter(Shooter clicked)
     {
-        if (clicked == null)
-        {
-            return;
-        }
-
-        if (!clicked.IsAlive)
-        {
-            return;
-        }
-
-        if (clicked.IsBusy)
+        if (clicked == null || !clicked.IsAlive || clicked.IsBusy)
         {
             return;
         }
@@ -183,10 +179,8 @@ public class ShooterQueueManager : MonoBehaviour
             return;
         }
 
-        EnsureFrontOccupantsSize();
-
-        bool inQueue = TryFindInQueue(clicked, out int col, out int dep);
-        bool inFront = frontIndexMap.ContainsKey(clicked);
+        bool inQueue = TryFindInQueue(clicked, out int column, out int depth);
+        bool inFront = frontSlotLookup.ContainsKey(clicked);
 
         if (!inQueue && !inFront)
         {
@@ -195,188 +189,268 @@ public class ShooterQueueManager : MonoBehaviour
 
         if (inQueue)
         {
-            if (dep != 0)
+            if (depth != 0)
             {
                 return;
             }
 
-            int gid = clicked.linkGroupId;
-
-            if (gid > 0)
+            if (clicked.linkGroupId > 0)
             {
-                TryActivateGroup(gid);
+                ActivateQueuedGroup(clicked.linkGroupId);
                 return;
             }
 
-            int reservedFrontIndex = GetFirstEmptyFrontSlotIndex();
-            if (reservedFrontIndex < 0)
-            {
-                return;
-            }
-
-            ReserveFrontSlot(clicked, reservedFrontIndex);
-
-            PopHeadFromColumn(col);
-            AnimateColumn(col);
-
-            clicked.StartMoveOnSpline(defaultSplinePath, Vector3.zero, () =>
-            {
-                PlaceToFrontSlot(clicked, reservedFrontIndex);
-            });
-
+            ActivateQueuedShooter(clicked, column);
             return;
         }
 
-        if (inFront)
+        if (clicked.linkGroupId > 0)
         {
-            int frontIndex = GetOrReserveFrontIndex(clicked);
-            if (frontIndex < 0)
+            ActivateFrontGroup(clicked.linkGroupId);
+            return;
+        }
+
+        ActivateFrontShooter(clicked);
+    }
+
+    private void ActivateQueuedShooter(Shooter shooter, int column)
+    {
+        int slotIndex = GetFirstEmptyFrontSlot();
+        if (slotIndex < 0)
+        {
+            return;
+        }
+
+        if (!TryAssignPlate(shooter, Vector3.zero))
+        {
+            return;
+        }
+
+        ReserveFrontSlot(shooter, slotIndex);
+        PopColumnHead(column);
+        AnimateColumn(column);
+
+        shooter.StartMoveOnSpline(
+            defaultSplinePath,
+            Vector3.zero,
+            () => AttachPlateToShooter(shooter),
+            () =>
+            {
+                ReleasePlate(shooter);
+                PlaceToReservedFrontSlot(shooter);
+            });
+    }
+
+    private void ActivateFrontShooter(Shooter shooter)
+    {
+        int slotIndex = GetFrontSlot(shooter);
+        if (slotIndex < 0)
+        {
+            return;
+        }
+
+        if (!TryAssignPlate(shooter, Vector3.zero))
+        {
+            return;
+        }
+
+        shooter.StartMoveOnSpline(
+            defaultSplinePath,
+            Vector3.zero,
+            () => AttachPlateToShooter(shooter),
+            () =>
+            {
+                ReleasePlate(shooter);
+                PlaceToReservedFrontSlot(shooter);
+            });
+    }
+
+    private void ActivateQueuedGroup(int groupId)
+    {
+        List<QueueGroupMember> members = GatherQueuedGroup(groupId);
+        if (members.Count == 0 || plateStack.Count < members.Count)
+        {
+            return;
+        }
+
+        HashSet<int> usedColumns = new HashSet<int>();
+
+        for (int i = 0; i < members.Count; i++)
+        {
+            if (members[i].depth != 0 || usedColumns.Contains(members[i].column))
             {
                 return;
             }
 
-            clicked.StartMoveOnSpline(defaultSplinePath, Vector3.zero, () =>
-            {
-                PlaceToFrontSlot(clicked, frontIndex);
-            });
+            usedColumns.Add(members[i].column);
+        }
 
+        members.Sort((a, b) => a.column.CompareTo(b.column));
+
+        int startSlot = FindContiguousFrontSpace(members.Count);
+        if (startSlot < 0)
+        {
             return;
+        }
+
+        float center = (members.Count - 1) * 0.5f;
+
+        for (int i = 0; i < members.Count; i++)
+        {
+            Shooter shooter = members[i].shooter;
+            Vector3 offset = new Vector3(0f, 0f, (i - center) * groupSideSpacing);
+
+            if (!TryAssignPlate(shooter, offset))
+            {
+                for (int j = 0; j < i; j++)
+                {
+                    ReleasePlate(members[j].shooter);
+                }
+
+                return;
+            }
+
+            ReserveFrontSlot(shooter, startSlot + i);
+        }
+
+        for (int i = 0; i < members.Count; i++)
+        {
+            PopColumnHead(members[i].column);
+            AnimateColumn(members[i].column);
+        }
+
+        for (int i = 0; i < members.Count; i++)
+        {
+            Shooter shooter = members[i].shooter;
+            Vector3 offset = new Vector3(0f, 0f, (i - center) * groupSideSpacing);
+
+            shooter.StartMoveOnSpline(
+                defaultSplinePath,
+                offset,
+                () => AttachPlateToShooter(shooter),
+                () =>
+                {
+                    ReleasePlate(shooter);
+                    PlaceToReservedFrontSlot(shooter);
+                });
         }
     }
 
-    private void TryActivateGroup(int groupId)
+    private void ActivateFrontGroup(int groupId)
     {
-        List<GroupMember> members = GatherGroupMembers(groupId);
-
-        if (members.Count <= 0)
+        List<FrontGroupMember> members = GatherFrontGroup(groupId);
+        if (members.Count == 0 || plateStack.Count < members.Count)
         {
             return;
         }
 
-        HashSet<int> uniqueCols = new HashSet<int>();
+        float center = (members.Count - 1) * 0.5f;
 
         for (int i = 0; i < members.Count; i++)
         {
-            if (members[i].depth != 0)
+            Shooter shooter = members[i].shooter;
+            Vector3 offset = new Vector3(0f, 0f, (i - center) * groupSideSpacing);
+
+            if (!TryAssignPlate(shooter, offset))
             {
+                for (int j = 0; j < i; j++)
+                {
+                    ReleasePlate(members[j].shooter);
+                }
+
                 return;
             }
-
-            if (uniqueCols.Contains(members[i].col))
-            {
-                return;
-            }
-
-            uniqueCols.Add(members[i].col);
-        }
-
-        members.Sort((a, b) => a.col.CompareTo(b.col));
-
-        int needed = members.Count;
-
-        int startFront = FindContiguousFreeFrontSlots(needed);
-        if (startFront < 0)
-        {
-            return;
         }
 
         for (int i = 0; i < members.Count; i++)
         {
-            Shooter s = members[i].shooter;
-            int slotIndex = startFront + i;
+            Shooter shooter = members[i].shooter;
+            Vector3 offset = new Vector3(0f, 0f, (i - center) * groupSideSpacing);
 
-            ReserveFrontSlot(s, slotIndex);
-        }
-
-        for (int i = 0; i < members.Count; i++)
-        {
-            PopHeadFromColumn(members[i].col);
-            AnimateColumn(members[i].col);
-        }
-
-        float center = (needed - 1) * 0.5f;
-
-        for (int i = 0; i < members.Count; i++)
-        {
-            Shooter s = members[i].shooter;
-            int slotIndex = startFront + i;
-
-            float x = (i - center) * groupSideSpacing;
-            Vector3 offset = new Vector3(0f, 0f, x);
-
-            s.StartMoveOnSpline(defaultSplinePath, offset, () =>
-            {
-                PlaceToFrontSlot(s, slotIndex);
-            });
+            shooter.StartMoveOnSpline(
+                defaultSplinePath,
+                offset,
+                () => AttachPlateToShooter(shooter),
+                () =>
+                {
+                    ReleasePlate(shooter);
+                    PlaceToReservedFrontSlot(shooter);
+                });
         }
     }
 
-    private List<GroupMember> GatherGroupMembers(int groupId)
+    private List<QueueGroupMember> GatherQueuedGroup(int groupId)
     {
-        List<GroupMember> list = new List<GroupMember>();
+        List<QueueGroupMember> result = new List<QueueGroupMember>();
 
         if (queueGrid == null)
         {
-            return list;
+            return result;
         }
 
-        for (int c = 0; c < columns; c++)
+        for (int column = 0; column < columns; column++)
         {
-            for (int d = 0; d < depthCount; d++)
+            for (int depth = 0; depth < depthCount; depth++)
             {
-                Shooter s = queueGrid[c, d];
-                if (s == null)
-                {
-                    continue;
-                }
+                Shooter shooter = queueGrid[column, depth];
 
-                if (s.linkGroupId == groupId)
+                if (shooter != null && shooter.linkGroupId == groupId)
                 {
-                    GroupMember m;
-                    m.shooter = s;
-                    m.col = c;
-                    m.depth = d;
-                    list.Add(m);
+                    QueueGroupMember member;
+                    member.shooter = shooter;
+                    member.column = column;
+                    member.depth = depth;
+                    result.Add(member);
                 }
             }
         }
 
-        return list;
+        return result;
     }
 
-    private int FindContiguousFreeFrontSlots(int needed)
+    private List<FrontGroupMember> GatherFrontGroup(int groupId)
     {
-        if (needed <= 0)
+        List<FrontGroupMember> result = new List<FrontGroupMember>();
+
+        for (int i = 0; i < frontShooters.Length; i++)
+        {
+            Shooter shooter = frontShooters[i];
+
+            if (shooter != null && shooter.linkGroupId == groupId)
+            {
+                FrontGroupMember member;
+                member.shooter = shooter;
+                member.slotIndex = i;
+                result.Add(member);
+            }
+        }
+
+        return result;
+    }
+
+    private int FindContiguousFrontSpace(int needed)
+    {
+        EnsureFrontSlots();
+
+        if (needed <= 0 || frontShooters.Length < needed)
         {
             return -1;
         }
 
-        EnsureFrontOccupantsSize();
-
-        if (frontOccupants == null)
+        for (int start = 0; start <= frontShooters.Length - needed; start++)
         {
-            return -1;
-        }
-
-        if (frontOccupants.Length < needed)
-        {
-            return -1;
-        }
-
-        for (int start = 0; start <= frontOccupants.Length - needed; start++)
-        {
-            bool ok = true;
+            bool free = true;
 
             for (int i = 0; i < needed; i++)
             {
-                if (frontOccupants[start + i] != null)
+                if (frontShooters[start + i] != null)
                 {
-                    ok = false;
+                    free = false;
                     break;
                 }
             }
 
-            if (ok)
+            if (free)
             {
                 return start;
             }
@@ -392,60 +466,44 @@ public class ShooterQueueManager : MonoBehaviour
             return;
         }
 
-        bool inQueue = TryFindInQueue(shooter, out int col, out int dep);
-
-        if (inQueue)
+        if (TryFindInQueue(shooter, out int column, out int depth))
         {
-            RemoveAtAndCompact(col, dep);
-            AnimateColumn(col);
+            RemoveFromColumn(column, depth);
+            AnimateColumn(column);
         }
 
-        FreeFrontReservation(shooter);
+        ReleasePlate(shooter);
+        ReleaseFrontSlot(shooter);
     }
 
-    private void PopHeadFromColumn(int col)
+    private void PopColumnHead(int column)
     {
-        if (queueGrid == null)
+        if (queueGrid == null || column < 0 || column >= columns)
         {
             return;
         }
 
-        if (col < 0 || col >= columns)
+        for (int depth = 0; depth < depthCount - 1; depth++)
         {
-            return;
+            queueGrid[column, depth] = queueGrid[column, depth + 1];
         }
 
-        for (int d = 0; d < depthCount - 1; d++)
-        {
-            queueGrid[col, d] = queueGrid[col, d + 1];
-        }
-
-        queueGrid[col, depthCount - 1] = null;
+        queueGrid[column, depthCount - 1] = null;
     }
 
-    private void RemoveAtAndCompact(int col, int dep)
+    private void RemoveFromColumn(int column, int depth)
     {
-        if (queueGrid == null)
+        if (queueGrid == null || column < 0 || column >= columns || depth < 0 || depth >= depthCount)
         {
             return;
         }
 
-        if (col < 0 || col >= columns)
+        for (int i = depth; i < depthCount - 1; i++)
         {
-            return;
+            queueGrid[column, i] = queueGrid[column, i + 1];
         }
 
-        if (dep < 0 || dep >= depthCount)
-        {
-            return;
-        }
-
-        for (int d = dep; d < depthCount - 1; d++)
-        {
-            queueGrid[col, d] = queueGrid[col, d + 1];
-        }
-
-        queueGrid[col, depthCount - 1] = null;
+        queueGrid[column, depthCount - 1] = null;
     }
 
     private void SnapAll()
@@ -455,55 +513,50 @@ public class ShooterQueueManager : MonoBehaviour
             return;
         }
 
-        for (int c = 0; c < columns; c++)
+        for (int column = 0; column < columns; column++)
         {
-            for (int d = 0; d < depthCount; d++)
+            for (int depth = 0; depth < depthCount; depth++)
             {
-                Shooter s = queueGrid[c, d];
-                Transform slot = GetSlot(c, d);
+                Shooter shooter = queueGrid[column, depth];
+                Transform slot = GetSlot(column, depth);
 
-                if (s == null || slot == null)
+                if (shooter == null || slot == null)
                 {
                     continue;
                 }
 
-                DOTween.Kill(s.transform);
-                s.transform.position = slot.position;
+                DOTween.Kill(shooter.transform);
+                shooter.transform.position = slot.position;
             }
         }
     }
 
-    private void AnimateColumn(int col)
+    private void AnimateColumn(int column)
     {
-        if (queueGrid == null || slotMatrix == null)
+        if (queueGrid == null || slotMatrix == null || column < 0 || column >= columns)
         {
             return;
         }
 
-        if (col < 0 || col >= columns)
+        for (int depth = 0; depth < depthCount; depth++)
         {
-            return;
-        }
+            Shooter shooter = queueGrid[column, depth];
+            Transform slot = GetSlot(column, depth);
 
-        for (int d = 0; d < depthCount; d++)
-        {
-            Shooter s = queueGrid[col, d];
-            Transform slot = GetSlot(col, d);
-
-            if (s == null || slot == null)
+            if (shooter == null || slot == null)
             {
                 continue;
             }
 
-            DOTween.Kill(s.transform);
-            s.transform.DOMove(slot.position, queueMoveDuration);
+            DOTween.Kill(shooter.transform);
+            shooter.transform.DOMove(slot.position, queueMoveDuration);
         }
     }
 
-    private bool TryFindInQueue(Shooter shooter, out int col, out int dep)
+    private bool TryFindInQueue(Shooter shooter, out int column, out int depth)
     {
-        col = -1;
-        dep = -1;
+        column = -1;
+        depth = -1;
 
         if (queueGrid == null)
         {
@@ -516,8 +569,8 @@ public class ShooterQueueManager : MonoBehaviour
             {
                 if (queueGrid[c, d] == shooter)
                 {
-                    col = c;
-                    dep = d;
+                    column = c;
+                    depth = d;
                     return true;
                 }
             }
@@ -526,79 +579,61 @@ public class ShooterQueueManager : MonoBehaviour
         return false;
     }
 
-    private bool IsValidSlot(int col, int dep)
+    private bool IsValidSlot(int column, int depth)
     {
-        if (slotMatrix == null)
-        {
-            return false;
-        }
-
-        if (col < 0 || col >= columns)
-        {
-            return false;
-        }
-
-        if (dep < 0 || dep >= depthCount)
-        {
-            return false;
-        }
-
-        return true;
+        return slotMatrix != null && column >= 0 && column < columns && depth >= 0 && depth < depthCount;
     }
 
-    private Transform GetSlot(int col, int dep)
+    private Transform GetSlot(int column, int depth)
     {
-        if (!IsValidSlot(col, dep))
-        {
-            return null;
-        }
-
-        return slotMatrix[col][dep];
+        return IsValidSlot(column, depth) ? slotMatrix[column][depth] : null;
     }
 
-    private void PlaceToFrontSlot(Shooter shooter, int index)
+    private void PlaceToFrontSlot(Shooter shooter, int slotIndex)
     {
-        if (shooter == null)
+        if (shooter == null || !shooter.IsAlive || frontSlots == null || slotIndex < 0 || slotIndex >= frontSlots.Length)
         {
             return;
         }
 
-        if (!shooter.IsAlive)
-        {
-            FreeFrontReservation(shooter);
-            return;
-        }
-
-        if (frontSlots == null || index < 0 || index >= frontSlots.Length)
-        {
-            return;
-        }
-
-        Transform slot = frontSlots[index];
-        shooter.JumpToFrontSlot(slot.position, null);
+        shooter.JumpToFrontSlot(frontSlots[slotIndex].position, null);
     }
 
-    private void EnsureFrontOccupantsSize()
+    private void PlaceToReservedFrontSlot(Shooter shooter)
+    {
+        int slotIndex = GetFrontSlot(shooter);
+
+        if (slotIndex < 0)
+        {
+            return;
+        }
+
+        PlaceToFrontSlot(shooter, slotIndex);
+    }
+
+    private void EnsureFrontSlots()
     {
         if (frontSlots == null)
         {
-            frontOccupants = new Shooter[0];
+            frontShooters = new Shooter[0];
+            frontSlotLookup.Clear();
             return;
         }
 
-        if (frontOccupants == null || frontOccupants.Length != frontSlots.Length)
+        if (frontShooters == null || frontShooters.Length != frontSlots.Length)
         {
-            frontOccupants = new Shooter[frontSlots.Length];
+            frontShooters = new Shooter[frontSlots.Length];
+            frontSlotLookup.Clear();
         }
     }
 
-    private int GetFirstEmptyFrontSlotIndex()
+    private int GetFirstEmptyFrontSlot()
     {
-        EnsureFrontOccupantsSize();
+        EnsureFrontSlots();
 
-        for (int i = 0; i < frontOccupants.Length; i++)
+        for (int i = 0; i < frontShooters.Length; i++)
         {
-            if (frontOccupants[i] == null)
+            if (frontShooters[i] == null)
             {
                 return i;
             }
@@ -607,67 +642,369 @@ public class ShooterQueueManager : MonoBehaviour
         return -1;
     }
 
-    private void ReserveFrontSlot(Shooter shooter, int index)
+    private void ReserveFrontSlot(Shooter shooter, int slotIndex)
     {
-        if (index < 0 || index >= frontOccupants.Length)
-        {
-            return;
-        }
-
-        frontOccupants[index] = shooter;
-        frontIndexMap[shooter] = index;
+        frontShooters[slotIndex] = shooter;
+        frontSlotLookup[shooter] = slotIndex;
     }
 
-    private int GetOrReserveFrontIndex(Shooter shooter)
+    private int GetFrontSlot(Shooter shooter)
     {
-        if (frontIndexMap.TryGetValue(shooter, out int idx))
+        if (frontSlotLookup.TryGetValue(shooter, out int slotIndex))
         {
-            return idx;
+            return slotIndex;
         }
 
-        idx = GetFirstEmptyFrontSlotIndex();
-        if (idx < 0)
+        slotIndex = GetFirstEmptyFrontSlot();
+        if (slotIndex < 0)
         {
             return -1;
         }
 
-        ReserveFrontSlot(shooter, idx);
-        return idx;
+        ReserveFrontSlot(shooter, slotIndex);
+        return slotIndex;
     }
 
-    private void FreeFrontReservation(Shooter shooter)
+    private void ReleaseFrontSlot(Shooter shooter)
     {
         if (shooter == null)
         {
             return;
         }
 
-        if (frontIndexMap.TryGetValue(shooter, out int idx))
+        if (frontSlotLookup.TryGetValue(shooter, out int slotIndex))
         {
-            if (idx >= 0 && idx < frontOccupants.Length)
+            if (slotIndex >= 0 && slotIndex < frontShooters.Length && frontShooters[slotIndex] == shooter)
             {
-                if (frontOccupants[idx] == shooter)
-                {
-                    frontOccupants[idx] = null;
-                }
+                frontShooters[slotIndex] = null;
             }
 
-            frontIndexMap.Remove(shooter);
+            frontSlotLookup.Remove(shooter);
         }
         else
         {
-            for (int i = 0; i < frontOccupants.Length; i++)
+            for (int i = 0; i < frontShooters.Length; i++)
             {
-                if (frontOccupants[i] == shooter)
+                if (frontShooters[i] == shooter)
                 {
-                    frontOccupants[i] = null;
+                    frontShooters[i] = null;
                 }
             }
         }
+
+        FillFrontGaps();
+    }
+
+    private void FillFrontGaps()
+    {
+        EnsureFrontSlots();
+
+        Dictionary<Shooter, int> previousSlots = new Dictionary<Shooter, int>(frontSlotLookup);
+        List<Shooter> ordered = new List<Shooter>();
+
+        for (int i = 0; i < frontShooters.Length; i++)
+        {
+            Shooter shooter = frontShooters[i];
+
+            if (shooter != null)
+            {
+                ordered.Add(shooter);
+            }
+
+            frontShooters[i] = null;
+        }
+
+        frontSlotLookup.Clear();
+
+        for (int i = 0; i < ordered.Count; i++)
+        {
+            Shooter shooter = ordered[i];
+            frontShooters[i] = shooter;
+            frontSlotLookup[shooter] = i;
+        }
+
+        for (int i = 0; i < ordered.Count; i++)
+        {
+            Shooter shooter = ordered[i];
+
+            if (!shooter.IsAlive || shooter.IsBusy || frontSlots[i] == null)
+            {
+                continue;
+            }
+
+            if (previousSlots.TryGetValue(shooter, out int oldSlot) && oldSlot == i)
+            {
+                continue;
+            }
+
+            shooter.ShiftToFrontSlot(frontSlots[i].position, null);
+        }
+    }
+
+    private bool TryAssignPlate(Shooter shooter, Vector3 formationOffset)
+    {
+        if (shooter == null)
+        {
+            return false;
+        }
+
+        if (shooterPlateMap.ContainsKey(shooter))
+        {
+            return true;
+        }
+
+        ShootersPlate plate = TakePlate();
+        if (plate == null)
+        {
+            return false;
+        }
+
+        shooterPlateMap[shooter] = plate;
+
+        Vector3 entryPoint = GetSplineStartWorldPosition(shooter, formationOffset);
+        float duration = Mathf.Max(0f, shooter.toSplineJumpDuration);
+
+        Quaternion entryRotation =
+            Quaternion.Euler(shooter.toSplineJumpRotationEuler) *
+            Quaternion.Euler(plateChildLocalRotationEuler);
+
+        plate.MoveToSplineStart(
+            entryPoint,
+            entryRotation,
+            duration,
+            platePickupSpinEuler);
+
+        CompactPlates(false);
+        return true;
+    }
+
+    private void AttachPlateToShooter(Shooter shooter)
+    {
+        if (shooter == null)
+        {
+            return;
+        }
+
+        if (!shooterPlateMap.TryGetValue(shooter, out ShootersPlate plate))
+        {
+            return;
+        }
+
+        plate.AttachToShooter(
+            shooter.transform,
+            plateChildLocalOffset,
+            plateChildLocalRotationEuler,
+            plateAttachDuration);
+    }
+
+    private void ReleasePlate(Shooter shooter)
+    {
+        if (shooter == null)
+        {
+            return;
+        }
+
+        if (!shooterPlateMap.TryGetValue(shooter, out ShootersPlate plate))
+        {
+            return;
+        }
+
+        shooterPlateMap.Remove(shooter);
+
+        if (!plateStack.Contains(plate))
+        {
+            plateStack.Add(plate);
+        }
+
+        blockedPlates.Add(plate);
+        CompactPlates(false);
+
+        int slotIndex = plateStack.IndexOf(plate);
+
+        MoveSpecificPlateToSlot(
+            plate,
+            slotIndex,
+            false,
+            plateReturnSpinEuler,
+            () => blockedPlates.Remove(plate));
+    }
+
+    private ShootersPlate TakePlate()
+    {
+        for (int i = plateStack.Count - 1; i >= 0; i--)
+        {
+            ShootersPlate plate = plateStack[i];
+
+            if (plate == null)
+            {
+                plateStack.RemoveAt(i);
+                continue;
+            }
+
+            if (blockedPlates.Contains(plate))
+            {
+                continue;
+            }
+
+            plateStack.RemoveAt(i);
+            return plate;
+        }
+
+        return null;
+    }
+
+    private Vector3 GetSplineStartWorldPosition(Shooter shooter, Vector3 formationOffset)
+    {
+        if (defaultSplinePath == null || defaultSplinePath.splineContainer == null)
+        {
+            return shooter != null ? shooter.transform.position : Vector3.zero;
+        }
+
+        SplineContainer container = defaultSplinePath.splineContainer;
+        if (container.Splines == null || container.Splines.Count == 0)
+        {
+            return shooter != null ? shooter.transform.position : Vector3.zero;
+        }
+
+        int index = Mathf.Clamp(defaultSplinePath.splineIndex, 0, container.Splines.Count - 1);
+        Spline spline = container.Splines[index];
+        Transform root = container.transform;
+
+        float lookAhead = shooter != null ? Mathf.Min(1f, shooter.splineRotationLookAheadT) : 0.03f;
+
+        float3 startLocal = SplineUtility.EvaluatePosition(spline, 0f);
+        Vector3 startWorld = root.TransformPoint(new Vector3(startLocal.x, startLocal.y, startLocal.z));
+
+        if (formationOffset.sqrMagnitude > 0.000001f)
+        {
+            float3 startTanLocal = SplineUtility.EvaluateTangent(spline, lookAhead);
+            float3 startUpLocal = SplineUtility.EvaluateUpVector(spline, lookAhead);
+
+            Vector3 startTanWorld = root.TransformDirection(new Vector3(startTanLocal.x, startTanLocal.y, startTanLocal.z));
+            Vector3 startUpWorld = root.TransformDirection(new Vector3(startUpLocal.x, startUpLocal.y, startUpLocal.z));
+
+            Vector3 startForward = startTanWorld.sqrMagnitude > 0.000001f ? startTanWorld.normalized : Vector3.forward;
+            Vector3 startUp = startUpWorld.sqrMagnitude > 0.000001f ? startUpWorld.normalized : Vector3.up;
+            Vector3 startRight = Vector3.Cross(startUp, startForward).normalized;
+
+            startWorld += (startRight * formationOffset.x) + (startUp * formationOffset.y) + (startForward * formationOffset.z);
+        }
+
+        return startWorld;
+    }
+
+    private void RebuildPlateLine()
+    {
+        plateStack.Clear();
+        shooterPlateMap.Clear();
+        blockedPlates.Clear();
+
+        if (plateLineRoot == null)
+        {
+            plateLineRoot = new GameObject("PlateLineRuntime").transform;
+        }
+
+        ClearChildren(plateLineRoot);
+
+        if (platePrefab == null || plateCount <= 0)
+        {
+            plateSlots = new Transform[0];
+            return;
+        }
+
+        plateSlots = new Transform[plateCount];
+
+        for (int i = 0; i < plateCount; i++)
+        {
+            Vector3 slotPos = plateLineOrigin + (plateLineStep * i);
+
+            GameObject slotObject = new GameObject("PlateSlot_" + i);
+            slotObject.transform.SetParent(plateLineRoot);
+            slotObject.transform.position = slotPos;
+            slotObject.transform.rotation = Quaternion.Euler(plateLineRotationEuler);
+            plateSlots[i] = slotObject.transform;
+
+            GameObject plateObject = Instantiate(
+                platePrefab,
+                slotPos,
+                Quaternion.Euler(plateLineRotationEuler),
+                plateLineRoot);
+
+            ShootersPlate plate = plateObject.GetComponent<ShootersPlate>();
+            if (plate == null)
+            {
+                plate = plateObject.AddComponent<ShootersPlate>();
+            }
+
+            plateStack.Add(plate);
+        }
+
+        CompactPlates(true);
+    }
+
+    private void CompactPlates(bool instant)
+    {
+        if (plateSlots == null)
+        {
+            return;
+        }
+
+        float duration = instant ? 0f : plateMoveDuration;
+        Quaternion lineRotation = Quaternion.Euler(plateLineRotationEuler);
+        int visualSlot = 0;
+
+        for (int i = 0; i < plateStack.Count && visualSlot < plateSlots.Length; i++)
+        {
+            ShootersPlate plate = plateStack[i];
+
+            if (plate == null || blockedPlates.Contains(plate))
+            {
+                continue;
+            }
+
+            plate.MoveToLine(
+                plateLineRoot,
+                plateSlots[visualSlot].position,
+                lineRotation,
+                duration,
+                Vector3.zero,
+                null);
+
+            visualSlot++;
+        }
+    }
+
+    private void MoveSpecificPlateToSlot(
+        ShootersPlate plate,
+        int slotIndex,
+        bool instant,
+        Vector3 spinEuler,
+        System.Action onComplete)
+    {
+        if (plate == null || plateSlots == null || slotIndex < 0 || slotIndex >= plateSlots.Length)
+        {
+            return;
+        }
+
+        float duration = instant ? 0f : plateMoveDuration;
+        Quaternion lineRotation = Quaternion.Euler(plateLineRotationEuler);
+
+        plate.MoveToLine(
+            plateLineRoot,
+            plateSlots[slotIndex].position,
+            lineRotation,
+            duration,
+            spinEuler,
+            onComplete);
     }
 
     private void ClearChildren(Transform t)
     {
+        if (t == null)
+        {
+            return;
+        }
+
         for (int i = t.childCount - 1; i >= 0; i--)
         {
             Destroy(t.GetChild(i).gameObject);

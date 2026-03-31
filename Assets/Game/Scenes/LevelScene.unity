@@ -1455,6 +1455,37 @@ MonoBehaviour:
   m_ShadowLayerMask: 1
   m_RenderingLayers: 1
   m_ShadowRenderingLayers: 1
+--- !u!1 &456550677
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 456550678}
+  m_Layer: 0
+  m_Name: SupportLineRoot
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &456550678
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 456550677}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 17, y: 0, z: 9}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &485729266
 GameObject:
   m_ObjectHideFlags: 0
@@ -3792,6 +3823,18 @@ MonoBehaviour:
   defaultSplinePath: {fileID: 1292444190}
   queueMoveDuration: 1
   groupSideSpacing: 5
+  platePrefab: {fileID: 7644142270951142335, guid: 87aa2406f5212804695fecd73f1d8f33, type: 3}
+  plateCount: 5
+  plateLineRoot: {fileID: 456550678}
+  plateLineOrigin: {x: 17, y: 0, z: 9}
+  plateLineStep: {x: 0.8, y: 0, z: 0}
+  plateLineRotationEuler: {x: 0, y: 0, z: -90}
+  plateChildLocalOffset: {x: 0, y: 0, z: 0}
+  plateChildLocalRotationEuler: {x: 0, y: 0, z: 0}
+  plateMoveDuration: 0.5
+  plateAttachDuration: 0.5
+  platePickupSpinEuler: {x: 0, y: 0, z: 0}
+  plateReturnSpinEuler: {x: 0, y: 0, z: 0}
 --- !u!4 &1614747628
 Transform:
   m_ObjectHideFlags: 0
@@ -4586,3 +4629,4 @@ SceneRoots:
   - {fileID: 1166166968}
   - {fileID: 12387135}
   - {fileID: 485729268}
+  - {fileID: 456550678}
