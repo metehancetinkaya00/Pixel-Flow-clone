@@ -151,7 +151,8 @@ public class BlockGridManager : MonoBehaviour
         {
             for (int x = 0; x < layout.width; x++)
             {
-                BlockColor cellColor = layout.Get(x, y);
+                int srcY = (layout.height - 1) - y;
+                BlockColor cellColor = layout.Get(x, srcY);
 
                 if (cellColor == BlockColor.None)
                 {
