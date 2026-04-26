@@ -1,0 +1,21 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7edcad24e748373449c2cd8a32ef0a88, type: 3}
+  m_Name: TrackData_12_Track12_SneakySocksSquad
+  m_EditorClassIdentifier: Assembly-CSharp::DeerFunk.CartoonAdventures.MusicTrackData
+  trackName: Sneaky Socks Squad
+  trackNumber: 12
+  audioClip: {fileID: 8300000, guid: 64dfe0ee44e61ac42a8d9d04fbad5e04, type: 3}
+  description: Stealth level music
+  mood: 5
+  duration: 0
+  isLoopable: 1

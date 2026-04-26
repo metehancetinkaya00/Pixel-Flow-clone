@@ -14,6 +14,7 @@ public class ShooterQueueManager : MonoBehaviour
     public SplinePathDefinition defaultSplinePath;
     public float queueMoveDuration = 0.15f;
     public float groupSideSpacing = 0.6f;
+    public float groupLaunchDelay = 0.08f;
 
     [Header("Plates")]
     public GameObject platePrefab;
@@ -23,12 +24,18 @@ public class ShooterQueueManager : MonoBehaviour
     public Vector3 plateLineStep = new Vector3(0.8f, 0f, 0f);
     public Vector3 plateLineRotationEuler = Vector3.zero;
     public Vector3 plateChildLocalOffset = new Vector3(0f, -1f, 0f);
-    public Vector3 plateChildLocalRotationEuler = Vector3.zero;
+    public Vector3 plateChildLocalRotationEuler = new Vector3(0f, -1f, 0f);
     public float plateMoveDuration = 0.2f;
     public float plateAttachDuration = 0.1f;
     public Vector3 platePickupSpinEuler = new Vector3(0f, 360f, 0f);
     public Vector3 plateReturnSpinEuler = new Vector3(0f, 360f, 0f);
 
+    [Header("Audio")]
+    public AudioClip shooterClickClip;
+    public AudioSource shooterClickSource;
+    [Range(0f, 1f)] public float shooterClickVolume = 1f;
+
+    // ---------------------------------------------------------------
     public struct SpawnedPlacement
     {
         public Shooter shooter;
@@ -36,19 +43,10 @@ public class ShooterQueueManager : MonoBehaviour
         public int depth;
     }
 
-    private struct QueueGroupMember
-    {
-        public Shooter shooter;
-        public int column;
-        public int depth;
-    }
+    private struct QueueGroupMember { public Shooter shooter; public int column; public int depth; }
+    private struct FrontGroupMember { public Shooter shooter; public int slotIndex; }
 
-    private struct FrontGroupMember
-    {
-        public Shooter shooter;
-        public int slotIndex;
-    }
-
+    // ---------------------------------------------------------------
     private Transform[][] slotMatrix;
     private int columns;
     private int depthCount;
@@ -59,8 +57,9 @@ public class ShooterQueueManager : MonoBehaviour
 
     private readonly List<ShootersPlate> plateStack = new List<ShootersPlate>();
     private readonly Dictionary<Shooter, ShootersPlate> shooterPlateMap = new Dictionary<Shooter, ShootersPlate>();
-    private readonly HashSet<ShootersPlate> blockedPlates = new HashSet<ShootersPlate>();
+    private readonly HashSet<ShootersPlate> returningPlates = new HashSet<ShootersPlate>();
     private Transform[] plateSlots;
+    // ---------------------------------------------------------------
 
     private void Awake()
     {
@@ -68,45 +67,45 @@ public class ShooterQueueManager : MonoBehaviour
         EnsureFrontSlots();
     }
 
+    // ---------------------------------------------------------------
+    // Layout & kurulum
+
     public void ApplyLayout(QueueLayoutSettings settings)
     {
         columns = Mathf.Max(1, settings.columnCount);
         depthCount = Mathf.Max(1, settings.depthCount);
 
         if (runtimeQueueRoot == null)
-        {
             runtimeQueueRoot = new GameObject("QueueSlotsRuntime").transform;
-        }
 
         if (settings.createSlotObjects)
-        {
             ClearChildren(runtimeQueueRoot);
-        }
 
         slotMatrix = new Transform[columns][];
 
-        for (int column = 0; column < columns; column++)
+        for (int col = 0; col < columns; col++)
         {
-            slotMatrix[column] = new Transform[depthCount];
+            slotMatrix[col] = new Transform[depthCount];
 
-            for (int depth = 0; depth < depthCount; depth++)
+            for (int dep = 0; dep < depthCount; dep++)
             {
-                Vector3 position = settings.origin + (settings.columnStep * column) + (settings.depthStep * depth);
+                Vector3 pos = settings.origin + settings.columnStep * col + settings.depthStep * dep;
+
+                GameObject slotObj;
 
                 if (settings.createSlotObjects)
                 {
-                    GameObject slotObject = new GameObject("Q_" + column + "_" + depth);
-                    slotObject.transform.SetParent(runtimeQueueRoot);
-                    slotObject.transform.position = position;
-                    slotMatrix[column][depth] = slotObject.transform;
+                    slotObj = new GameObject($"Q_{col}_{dep}");
+                    slotObj.transform.SetParent(runtimeQueueRoot);
                 }
                 else
                 {
-                    GameObject slotObject = new GameObject();
-                    slotObject.hideFlags = HideFlags.HideAndDontSave;
-                    slotObject.transform.position = position;
-                    slotMatrix[column][depth] = slotObject.transform;
+                    slotObj = new GameObject();
+                    slotObj.hideFlags = HideFlags.HideAndDontSave;
                 }
+
+                slotObj.transform.position = pos;
+                slotMatrix[col][dep] = slotObj.transform;
             }
         }
 
@@ -123,194 +122,127 @@ public class ShooterQueueManager : MonoBehaviour
     {
         EnsureFrontSlots();
 
-        if (queueGrid == null || slotMatrix == null)
-        {
-            return;
-        }
+        if (queueGrid == null || slotMatrix == null) return;
 
-        for (int column = 0; column < columns; column++)
-        {
-            for (int depth = 0; depth < depthCount; depth++)
-            {
-                queueGrid[column, depth] = null;
-            }
-        }
+        // Grid ve front'u temizle
+        for (int col = 0; col < columns; col++)
+            for (int dep = 0; dep < depthCount; dep++)
+                queueGrid[col, dep] = null;
 
         for (int i = 0; i < frontShooters.Length; i++)
-        {
             frontShooters[i] = null;
-        }
 
         frontSlotLookup.Clear();
         RebuildPlateLine();
 
-        if (placements == null)
+        if (placements == null) { SnapAll(); return; }
+
+        foreach (var p in placements)
         {
-            SnapAll();
-            return;
-        }
-
-        for (int i = 0; i < placements.Count; i++)
-        {
-            Shooter shooter = placements[i].shooter;
-            int column = placements[i].column;
-            int depth = placements[i].depth;
-
-            if (shooter == null || !IsValidSlot(column, depth))
-            {
-                continue;
-            }
-
-            queueGrid[column, depth] = shooter;
+            if (p.shooter != null && IsValidSlot(p.column, p.depth))
+                queueGrid[p.column, p.depth] = p.shooter;
         }
 
         SnapAll();
     }
 
+    // ---------------------------------------------------------------
+    // Aktivasyon – kullanýcý bir shooter'a týkladýðýnda buraya gel
+
     public void TryActivateShooter(Shooter clicked)
     {
-        if (clicked == null || !clicked.IsAlive || clicked.IsBusy)
-        {
-            return;
-        }
-
-        if (defaultSplinePath == null || defaultSplinePath.splineContainer == null)
-        {
-            return;
-        }
+        if (clicked == null || !clicked.IsAlive || clicked.IsBusy) return;
+        if (defaultSplinePath?.splineContainer == null) return;
 
         bool inQueue = TryFindInQueue(clicked, out int column, out int depth);
         bool inFront = frontSlotLookup.ContainsKey(clicked);
 
-        if (!inQueue && !inFront)
-        {
-            return;
-        }
+        if (!inQueue && !inFront) return;
+
+        PlayClickSound();
 
         if (inQueue)
         {
-            if (depth != 0)
-            {
-                return;
-            }
+            if (depth != 0) return; // sadece en öndekiler aktive olabilir
 
-            if (clicked.linkGroupId > 0)
-            {
-                ActivateQueuedGroup(clicked.linkGroupId);
-                return;
-            }
-
-            ActivateQueuedShooter(clicked, column);
+            if (clicked.linkGroupId > 0) ActivateQueuedGroup(clicked.linkGroupId);
+            else ActivateQueuedShooter(clicked, column);
             return;
         }
 
-        if (clicked.linkGroupId > 0)
-        {
-            ActivateFrontGroup(clicked.linkGroupId);
-            return;
-        }
-
-        ActivateFrontShooter(clicked);
+        if (clicked.linkGroupId > 0) ActivateFrontGroup(clicked.linkGroupId);
+        else ActivateFrontShooter(clicked);
     }
+
+    // ---------------------------------------------------------------
+    // Tekli aktivasyon
 
     private void ActivateQueuedShooter(Shooter shooter, int column)
     {
-        int slotIndex = GetFirstEmptyFrontSlot();
-        if (slotIndex < 0)
-        {
-            return;
-        }
+        if (returningPlates.Count > 0) return;
 
-        if (!TryAssignPlate(shooter, Vector3.zero))
-        {
-            return;
-        }
+        int slotIndex = GetFirstEmptyFrontSlot();
+        if (slotIndex < 0) return;
+
+        if (!TryAssignPlate(shooter, Vector3.zero)) return;
 
         ReserveFrontSlot(shooter, slotIndex);
         PopColumnHead(column);
         AnimateColumn(column);
 
         shooter.StartMoveOnSpline(
-            defaultSplinePath,
-            Vector3.zero,
-            () => AttachPlateToShooter(shooter),
-            () =>
-            {
-                ReleasePlate(shooter);
-                PlaceToReservedFrontSlot(shooter);
-            });
+      defaultSplinePath,
+      Vector3.zero,
+      () => AttachPlateToShooter(shooter),
+      () => { ReleasePlate(shooter); PlaceToReservedFrontSlot(shooter); });
     }
 
     private void ActivateFrontShooter(Shooter shooter)
     {
-        int slotIndex = GetFrontSlot(shooter);
-        if (slotIndex < 0)
-        {
-            return;
-        }
+        if (returningPlates.Count > 0) return;
 
-        if (!TryAssignPlate(shooter, Vector3.zero))
-        {
-            return;
-        }
+        int slotIndex = GetFrontSlot(shooter);
+        if (slotIndex < 0) return;
+
+        if (!TryAssignPlate(shooter, Vector3.zero)) return;
 
         shooter.StartMoveOnSpline(
-            defaultSplinePath,
-            Vector3.zero,
-            () => AttachPlateToShooter(shooter),
-            () =>
-            {
-                ReleasePlate(shooter);
-                PlaceToReservedFrontSlot(shooter);
-            });
+     defaultSplinePath,
+     Vector3.zero,
+     () => AttachPlateToShooter(shooter),
+     () => { ReleasePlate(shooter); PlaceToReservedFrontSlot(shooter); });
     }
+
+    // ---------------------------------------------------------------
+    // Grup aktivasyonu
 
     private void ActivateQueuedGroup(int groupId)
     {
-        List<QueueGroupMember> members = GatherQueuedGroup(groupId);
-        if (members.Count == 0 || plateStack.Count < members.Count)
+        if (returningPlates.Count > 0) return;
+
+        var members = GatherQueuedGroup(groupId);
+        if (members.Count == 0 || AvailablePlateCount() < members.Count) return;
+
+        // Hepsi depth 0'da olmalý ve farklý kolonlarda
+        var usedColumns = new HashSet<int>();
+        foreach (var m in members)
         {
-            return;
-        }
-
-        HashSet<int> usedColumns = new HashSet<int>();
-
-        for (int i = 0; i < members.Count; i++)
-        {
-            if (members[i].depth != 0 || usedColumns.Contains(members[i].column))
-            {
-                return;
-            }
-
-            usedColumns.Add(members[i].column);
+            if (m.depth != 0 || !usedColumns.Add(m.column)) return;
         }
 
         members.Sort((a, b) => a.column.CompareTo(b.column));
 
         int startSlot = FindContiguousFrontSpace(members.Count);
-        if (startSlot < 0)
-        {
-            return;
-        }
+        if (startSlot < 0) return;
 
         float center = (members.Count - 1) * 0.5f;
 
+        // Önce plate rezervasyonu yap, sonra hareket baþlat
         for (int i = 0; i < members.Count; i++)
         {
-            Shooter shooter = members[i].shooter;
             Vector3 offset = new Vector3(0f, 0f, (i - center) * groupSideSpacing);
-
-            if (!TryAssignPlate(shooter, offset))
-            {
-                for (int j = 0; j < i; j++)
-                {
-                    ReleasePlate(members[j].shooter);
-                }
-
-                return;
-            }
-
-            ReserveFrontSlot(shooter, startSlot + i);
+            if (!TryAssignPlate(members[i].shooter, offset)) return;
+            ReserveFrontSlot(members[i].shooter, startSlot + i);
         }
 
         for (int i = 0; i < members.Count; i++)
@@ -321,150 +253,85 @@ public class ShooterQueueManager : MonoBehaviour
 
         for (int i = 0; i < members.Count; i++)
         {
-            Shooter shooter = members[i].shooter;
             Vector3 offset = new Vector3(0f, 0f, (i - center) * groupSideSpacing);
-
-            shooter.StartMoveOnSpline(
-                defaultSplinePath,
-                offset,
-                () => AttachPlateToShooter(shooter),
-                () =>
-                {
-                    ReleasePlate(shooter);
-                    PlaceToReservedFrontSlot(shooter);
-                });
+            LaunchGroupedShooter(members[i].shooter, offset, i * groupLaunchDelay);
         }
     }
 
     private void ActivateFrontGroup(int groupId)
     {
-        List<FrontGroupMember> members = GatherFrontGroup(groupId);
-        if (members.Count == 0 || plateStack.Count < members.Count)
-        {
-            return;
-        }
+        if (returningPlates.Count > 0) return;
+
+        var members = GatherFrontGroup(groupId);
+        if (members.Count == 0 || AvailablePlateCount() < members.Count) return;
 
         float center = (members.Count - 1) * 0.5f;
 
         for (int i = 0; i < members.Count; i++)
         {
-            Shooter shooter = members[i].shooter;
             Vector3 offset = new Vector3(0f, 0f, (i - center) * groupSideSpacing);
-
-            if (!TryAssignPlate(shooter, offset))
-            {
-                for (int j = 0; j < i; j++)
-                {
-                    ReleasePlate(members[j].shooter);
-                }
-
-                return;
-            }
+            if (!TryAssignPlate(members[i].shooter, offset)) return;
         }
 
         for (int i = 0; i < members.Count; i++)
         {
-            Shooter shooter = members[i].shooter;
             Vector3 offset = new Vector3(0f, 0f, (i - center) * groupSideSpacing);
-
-            shooter.StartMoveOnSpline(
-                defaultSplinePath,
-                offset,
-                () => AttachPlateToShooter(shooter),
-                () =>
-                {
-                    ReleasePlate(shooter);
-                    PlaceToReservedFrontSlot(shooter);
-                });
+            LaunchGroupedShooter(members[i].shooter, offset, i * groupLaunchDelay);
         }
     }
 
+    private void LaunchGroupedShooter(Shooter shooter, Vector3 offset, float delay)
+    {
+        DOVirtual.DelayedCall(delay, () =>
+        {
+            shooter.StartMoveOnSpline(
+     defaultSplinePath,
+     offset,
+     false,
+     () => AttachPlateToShooter(shooter),
+     () => { ReleasePlate(shooter); PlaceToReservedFrontSlot(shooter); });
+        });
+    }
+
+    // ---------------------------------------------------------------
+    // Grup toplama yardýmcýlarý
+
     private List<QueueGroupMember> GatherQueuedGroup(int groupId)
     {
-        List<QueueGroupMember> result = new List<QueueGroupMember>();
+        var result = new List<QueueGroupMember>();
+        if (queueGrid == null) return result;
 
-        if (queueGrid == null)
-        {
-            return result;
-        }
-
-        for (int column = 0; column < columns; column++)
-        {
-            for (int depth = 0; depth < depthCount; depth++)
+        for (int col = 0; col < columns; col++)
+            for (int dep = 0; dep < depthCount; dep++)
             {
-                Shooter shooter = queueGrid[column, depth];
-
-                if (shooter != null && shooter.linkGroupId == groupId)
-                {
-                    QueueGroupMember member;
-                    member.shooter = shooter;
-                    member.column = column;
-                    member.depth = depth;
-                    result.Add(member);
-                }
+                Shooter s = queueGrid[col, dep];
+                if (s != null && s.linkGroupId == groupId)
+                    result.Add(new QueueGroupMember { shooter = s, column = col, depth = dep });
             }
-        }
 
         return result;
     }
 
     private List<FrontGroupMember> GatherFrontGroup(int groupId)
     {
-        List<FrontGroupMember> result = new List<FrontGroupMember>();
+        var result = new List<FrontGroupMember>();
 
         for (int i = 0; i < frontShooters.Length; i++)
         {
-            Shooter shooter = frontShooters[i];
-
-            if (shooter != null && shooter.linkGroupId == groupId)
-            {
-                FrontGroupMember member;
-                member.shooter = shooter;
-                member.slotIndex = i;
-                result.Add(member);
-            }
+            Shooter s = frontShooters[i];
+            if (s != null && s.linkGroupId == groupId)
+                result.Add(new FrontGroupMember { shooter = s, slotIndex = i });
         }
 
         return result;
     }
 
-    private int FindContiguousFrontSpace(int needed)
-    {
-        EnsureFrontSlots();
-
-        if (needed <= 0 || frontShooters.Length < needed)
-        {
-            return -1;
-        }
-
-        for (int start = 0; start <= frontShooters.Length - needed; start++)
-        {
-            bool free = true;
-
-            for (int i = 0; i < needed; i++)
-            {
-                if (frontShooters[start + i] != null)
-                {
-                    free = false;
-                    break;
-                }
-            }
-
-            if (free)
-            {
-                return start;
-            }
-        }
-
-        return -1;
-    }
+    // ---------------------------------------------------------------
+    // Dýþarýdan çaðrýlan: shooter ölünce temizlik yap
 
     public void NotifyShooterDestroyed(Shooter shooter)
     {
-        if (shooter == null)
-        {
-            return;
-        }
+        if (shooter == null) return;
 
         if (TryFindInQueue(shooter, out int column, out int depth))
         {
@@ -476,80 +343,57 @@ public class ShooterQueueManager : MonoBehaviour
         ReleaseFrontSlot(shooter);
     }
 
+    // ---------------------------------------------------------------
+    // Queue grid operasyonlarý
+
     private void PopColumnHead(int column)
     {
-        if (queueGrid == null || column < 0 || column >= columns)
-        {
-            return;
-        }
-
-        for (int depth = 0; depth < depthCount - 1; depth++)
-        {
-            queueGrid[column, depth] = queueGrid[column, depth + 1];
-        }
-
-        queueGrid[column, depthCount - 1] = null;
+        if (!IsValidColumn(column)) return;
+        ShiftColumnUp(column, 0);
     }
 
     private void RemoveFromColumn(int column, int depth)
     {
-        if (queueGrid == null || column < 0 || column >= columns || depth < 0 || depth >= depthCount)
-        {
-            return;
-        }
+        if (!IsValidColumn(column) || depth < 0 || depth >= depthCount) return;
+        ShiftColumnUp(column, depth);
+    }
 
-        for (int i = depth; i < depthCount - 1; i++)
-        {
+    // depth'ten baþlayarak yukarýyý aþaðýya çek
+    private void ShiftColumnUp(int column, int fromDepth)
+    {
+        for (int i = fromDepth; i < depthCount - 1; i++)
             queueGrid[column, i] = queueGrid[column, i + 1];
-        }
-
         queueGrid[column, depthCount - 1] = null;
     }
 
     private void SnapAll()
     {
-        if (queueGrid == null || slotMatrix == null)
-        {
-            return;
-        }
+        if (queueGrid == null || slotMatrix == null) return;
 
-        for (int column = 0; column < columns; column++)
-        {
-            for (int depth = 0; depth < depthCount; depth++)
+        for (int col = 0; col < columns; col++)
+            for (int dep = 0; dep < depthCount; dep++)
             {
-                Shooter shooter = queueGrid[column, depth];
-                Transform slot = GetSlot(column, depth);
+                Shooter s = queueGrid[col, dep];
+                Transform slot = GetSlot(col, dep);
+                if (s == null || slot == null) continue;
 
-                if (shooter == null || slot == null)
-                {
-                    continue;
-                }
-
-                DOTween.Kill(shooter.transform);
-                shooter.transform.position = slot.position;
+                DOTween.Kill(s.transform);
+                s.transform.position = slot.position;
             }
-        }
     }
 
     private void AnimateColumn(int column)
     {
-        if (queueGrid == null || slotMatrix == null || column < 0 || column >= columns)
+        if (queueGrid == null || slotMatrix == null || !IsValidColumn(column)) return;
+
+        for (int dep = 0; dep < depthCount; dep++)
         {
-            return;
-        }
+            Shooter s = queueGrid[column, dep];
+            Transform slot = GetSlot(column, dep);
+            if (s == null || slot == null) continue;
 
-        for (int depth = 0; depth < depthCount; depth++)
-        {
-            Shooter shooter = queueGrid[column, depth];
-            Transform slot = GetSlot(column, depth);
-
-            if (shooter == null || slot == null)
-            {
-                continue;
-            }
-
-            DOTween.Kill(shooter.transform);
-            shooter.transform.DOMove(slot.position, queueMoveDuration);
+            DOTween.Kill(s.transform);
+            s.transform.DOMove(slot.position, queueMoveDuration);
         }
     }
 
@@ -558,58 +402,17 @@ public class ShooterQueueManager : MonoBehaviour
         column = -1;
         depth = -1;
 
-        if (queueGrid == null)
-        {
-            return false;
-        }
+        if (queueGrid == null) return false;
 
-        for (int c = 0; c < columns; c++)
-        {
-            for (int d = 0; d < depthCount; d++)
-            {
-                if (queueGrid[c, d] == shooter)
-                {
-                    column = c;
-                    depth = d;
-                    return true;
-                }
-            }
-        }
+        for (int col = 0; col < columns; col++)
+            for (int dep = 0; dep < depthCount; dep++)
+                if (queueGrid[col, dep] == shooter) { column = col; depth = dep; return true; }
 
         return false;
     }
 
-    private bool IsValidSlot(int column, int depth)
-    {
-        return slotMatrix != null && column >= 0 && column < columns && depth >= 0 && depth < depthCount;
-    }
-
-    private Transform GetSlot(int column, int depth)
-    {
-        return IsValidSlot(column, depth) ? slotMatrix[column][depth] : null;
-    }
-
-    private void PlaceToFrontSlot(Shooter shooter, int slotIndex)
-    {
-        if (shooter == null || !shooter.IsAlive || frontSlots == null || slotIndex < 0 || slotIndex >= frontSlots.Length)
-        {
-            return;
-        }
-
-        shooter.JumpToFrontSlot(frontSlots[slotIndex].position, null);
-    }
-
-    private void PlaceToReservedFrontSlot(Shooter shooter)
-    {
-        int slotIndex = GetFrontSlot(shooter);
-
-        if (slotIndex < 0)
-        {
-            return;
-        }
-
-        PlaceToFrontSlot(shooter, slotIndex);
-    }
+    // ---------------------------------------------------------------
+    // Front slot yönetimi
 
     private void EnsureFrontSlots()
     {
@@ -630,13 +433,22 @@ public class ShooterQueueManager : MonoBehaviour
     private int GetFirstEmptyFrontSlot()
     {
         EnsureFrontSlots();
-
         for (int i = 0; i < frontShooters.Length; i++)
+            if (frontShooters[i] == null) return i;
+        return -1;
+    }
+
+    private int FindContiguousFrontSpace(int needed)
+    {
+        EnsureFrontSlots();
+        if (needed <= 0 || frontShooters.Length < needed) return -1;
+
+        for (int start = 0; start <= frontShooters.Length - needed; start++)
         {
-            if (frontShooters[i] == null)
-            {
-                return i;
-            }
+            bool free = true;
+            for (int i = 0; i < needed; i++)
+                if (frontShooters[start + i] != null) { free = false; break; }
+            if (free) return start;
         }
 
         return -1;
@@ -650,67 +462,56 @@ public class ShooterQueueManager : MonoBehaviour
 
     private int GetFrontSlot(Shooter shooter)
     {
-        if (frontSlotLookup.TryGetValue(shooter, out int slotIndex))
-        {
-            return slotIndex;
-        }
+        if (frontSlotLookup.TryGetValue(shooter, out int slotIndex)) return slotIndex;
 
+        // Lookup'ta yoksa boþ slot bul ve rezerve et
         slotIndex = GetFirstEmptyFrontSlot();
-        if (slotIndex < 0)
-        {
-            return -1;
-        }
-
-        ReserveFrontSlot(shooter, slotIndex);
+        if (slotIndex >= 0) ReserveFrontSlot(shooter, slotIndex);
         return slotIndex;
     }
 
     private void ReleaseFrontSlot(Shooter shooter)
     {
-        if (shooter == null)
-        {
-            return;
-        }
+        if (shooter == null) return;
 
         if (frontSlotLookup.TryGetValue(shooter, out int slotIndex))
         {
             if (slotIndex >= 0 && slotIndex < frontShooters.Length && frontShooters[slotIndex] == shooter)
-            {
                 frontShooters[slotIndex] = null;
-            }
 
             frontSlotLookup.Remove(shooter);
         }
         else
         {
+            // Lookup bozuksa brute-force temizle
             for (int i = 0; i < frontShooters.Length; i++)
-            {
-                if (frontShooters[i] == shooter)
-                {
-                    frontShooters[i] = null;
-                }
-            }
+                if (frontShooters[i] == shooter) frontShooters[i] = null;
         }
 
         FillFrontGaps();
     }
 
+    private void PlaceToFrontSlot(Shooter shooter, int slotIndex)
+    {
+        if (shooter == null || !shooter.IsAlive || frontSlots == null) return;
+        if (slotIndex < 0 || slotIndex >= frontSlots.Length) return;
+        shooter.JumpToFrontSlot(frontSlots[slotIndex].position, null);
+    }
+
+    private void PlaceToReservedFrontSlot(Shooter shooter) =>
+        PlaceToFrontSlot(shooter, GetFrontSlot(shooter));
+
+    // Boþluklarý sola kaydýr; meþgul olanlar için tekrar dene
     private void FillFrontGaps()
     {
         EnsureFrontSlots();
 
-        Dictionary<Shooter, int> previousSlots = new Dictionary<Shooter, int>(frontSlotLookup);
-        List<Shooter> ordered = new List<Shooter>();
-
+        // Saðlýklý shooter'larý topla
+        var ordered = new List<Shooter>();
         for (int i = 0; i < frontShooters.Length; i++)
         {
-            Shooter shooter = frontShooters[i];
-
-            if (shooter != null)
-            {
-                ordered.Add(shooter);
-            }
-
+            if (frontShooters[i] != null && frontShooters[i].IsAlive)
+                ordered.Add(frontShooters[i]);
             frontShooters[i] = null;
         }
 
@@ -718,46 +519,41 @@ public class ShooterQueueManager : MonoBehaviour
 
         for (int i = 0; i < ordered.Count; i++)
         {
-            Shooter shooter = ordered[i];
-            frontShooters[i] = shooter;
-            frontSlotLookup[shooter] = i;
+            frontShooters[i] = ordered[i];
+            frontSlotLookup[ordered[i]] = i;
         }
+
+        bool needsRetry = false;
 
         for (int i = 0; i < ordered.Count; i++)
         {
-            Shooter shooter = ordered[i];
+            if (frontSlots[i] == null) continue;
 
-            if (!shooter.IsAlive || shooter.IsBusy || frontSlots[i] == null)
-            {
-                continue;
-            }
+            Shooter s = ordered[i];
+            if (s.IsBusy) { needsRetry = true; continue; }
 
-            if (previousSlots.TryGetValue(shooter, out int oldSlot) && oldSlot == i)
-            {
-                continue;
-            }
-
-            shooter.ShiftToFrontSlot(frontSlots[i].position, null);
+            Vector3 target = frontSlots[i].position;
+            if ((s.transform.position - target).sqrMagnitude > 0.0001f)
+                s.ShiftToFrontSlot(target, FillFrontGaps);
         }
+
+        // Bir shooter hâlâ meþgulse kýsa süre sonra tekrar dene
+        if (needsRetry)
+            DOVirtual.DelayedCall(0.05f, FillFrontGaps);
     }
+
+    // ---------------------------------------------------------------
+    // Plate sistemi
+
+    private int AvailablePlateCount() => plateStack.Count - returningPlates.Count;
 
     private bool TryAssignPlate(Shooter shooter, Vector3 formationOffset)
     {
-        if (shooter == null)
-        {
-            return false;
-        }
-
-        if (shooterPlateMap.ContainsKey(shooter))
-        {
-            return true;
-        }
+        if (shooter == null) return false;
+        if (shooterPlateMap.ContainsKey(shooter)) return true; // zaten var
 
         ShootersPlate plate = TakePlate();
-        if (plate == null)
-        {
-            return false;
-        }
+        if (plate == null) return false;
 
         shooterPlateMap[shooter] = plate;
 
@@ -768,27 +564,14 @@ public class ShooterQueueManager : MonoBehaviour
             Quaternion.Euler(shooter.toSplineJumpRotationEuler) *
             Quaternion.Euler(plateChildLocalRotationEuler);
 
-        plate.MoveToSplineStart(
-            entryPoint,
-            entryRotation,
-            duration,
-            platePickupSpinEuler);
-
-        CompactPlates(false);
+        plate.MoveToSplineStart(entryPoint, entryRotation, duration, platePickupSpinEuler);
         return true;
     }
 
     private void AttachPlateToShooter(Shooter shooter)
     {
-        if (shooter == null)
-        {
-            return;
-        }
-
-        if (!shooterPlateMap.TryGetValue(shooter, out ShootersPlate plate))
-        {
-            return;
-        }
+        if (shooter == null) return;
+        if (!shooterPlateMap.TryGetValue(shooter, out ShootersPlate plate)) return;
 
         plate.AttachToShooter(
             shooter.transform,
@@ -799,110 +582,48 @@ public class ShooterQueueManager : MonoBehaviour
 
     private void ReleasePlate(Shooter shooter)
     {
-        if (shooter == null)
-        {
-            return;
-        }
-
-        if (!shooterPlateMap.TryGetValue(shooter, out ShootersPlate plate))
-        {
-            return;
-        }
+        if (shooter == null) return;
+        if (!shooterPlateMap.TryGetValue(shooter, out ShootersPlate plate)) return;
 
         shooterPlateMap.Remove(shooter);
 
-        if (!plateStack.Contains(plate))
-        {
-            plateStack.Add(plate);
-        }
+        if (plateStack.Contains(plate)) return; // zaten havuzda
 
-        blockedPlates.Add(plate);
-        CompactPlates(false);
+        plateStack.Add(plate);
+        returningPlates.Add(plate);
 
-        int slotIndex = plateStack.IndexOf(plate);
-
-        MoveSpecificPlateToSlot(
-            plate,
-            slotIndex,
-            false,
-            plateReturnSpinEuler,
-            () => blockedPlates.Remove(plate));
+        int slotIndex = plateStack.Count - 1;
+        MoveSpecificPlateToSlot(plate, slotIndex, false, plateReturnSpinEuler,
+            onComplete: () => returningPlates.Remove(plate));
     }
 
     private ShootersPlate TakePlate()
     {
-        for (int i = plateStack.Count - 1; i >= 0; i--)
+        while (plateStack.Count > 0)
         {
-            ShootersPlate plate = plateStack[i];
+            int last = plateStack.Count - 1;
+            ShootersPlate plate = plateStack[last];
 
-            if (plate == null)
-            {
-                plateStack.RemoveAt(i);
-                continue;
-            }
+            if (plate == null) { plateStack.RemoveAt(last); continue; }
 
-            if (blockedPlates.Contains(plate))
-            {
-                continue;
-            }
+            // Dönmekte olan platelere dokunma
+            if (returningPlates.Contains(plate)) return null;
 
-            plateStack.RemoveAt(i);
+            plateStack.RemoveAt(last);
             return plate;
         }
 
         return null;
     }
 
-    private Vector3 GetSplineStartWorldPosition(Shooter shooter, Vector3 formationOffset)
-    {
-        if (defaultSplinePath == null || defaultSplinePath.splineContainer == null)
-        {
-            return shooter != null ? shooter.transform.position : Vector3.zero;
-        }
-
-        SplineContainer container = defaultSplinePath.splineContainer;
-        if (container.Splines == null || container.Splines.Count == 0)
-        {
-            return shooter != null ? shooter.transform.position : Vector3.zero;
-        }
-
-        int index = Mathf.Clamp(defaultSplinePath.splineIndex, 0, container.Splines.Count - 1);
-        Spline spline = container.Splines[index];
-        Transform root = container.transform;
-
-        float lookAhead = shooter != null ? Mathf.Min(1f, shooter.splineRotationLookAheadT) : 0.03f;
-
-        float3 startLocal = SplineUtility.EvaluatePosition(spline, 0f);
-        Vector3 startWorld = root.TransformPoint(new Vector3(startLocal.x, startLocal.y, startLocal.z));
-
-        if (formationOffset.sqrMagnitude > 0.000001f)
-        {
-            float3 startTanLocal = SplineUtility.EvaluateTangent(spline, lookAhead);
-            float3 startUpLocal = SplineUtility.EvaluateUpVector(spline, lookAhead);
-
-            Vector3 startTanWorld = root.TransformDirection(new Vector3(startTanLocal.x, startTanLocal.y, startTanLocal.z));
-            Vector3 startUpWorld = root.TransformDirection(new Vector3(startUpLocal.x, startUpLocal.y, startUpLocal.z));
-
-            Vector3 startForward = startTanWorld.sqrMagnitude > 0.000001f ? startTanWorld.normalized : Vector3.forward;
-            Vector3 startUp = startUpWorld.sqrMagnitude > 0.000001f ? startUpWorld.normalized : Vector3.up;
-            Vector3 startRight = Vector3.Cross(startUp, startForward).normalized;
-
-            startWorld += (startRight * formationOffset.x) + (startUp * formationOffset.y) + (startForward * formationOffset.z);
-        }
-
-        return startWorld;
-    }
-
     private void RebuildPlateLine()
     {
         plateStack.Clear();
         shooterPlateMap.Clear();
-        blockedPlates.Clear();
+        returningPlates.Clear();
 
         if (plateLineRoot == null)
-        {
             plateLineRoot = new GameObject("PlateLineRuntime").transform;
-        }
 
         ClearChildren(plateLineRoot);
 
@@ -916,98 +637,114 @@ public class ShooterQueueManager : MonoBehaviour
 
         for (int i = 0; i < plateCount; i++)
         {
-            Vector3 slotPos = plateLineOrigin + (plateLineStep * i);
+            Vector3 slotPos = plateLineOrigin + plateLineStep * i;
+            Quaternion lineRot = Quaternion.Euler(plateLineRotationEuler);
 
-            GameObject slotObject = new GameObject("PlateSlot_" + i);
-            slotObject.transform.SetParent(plateLineRoot);
-            slotObject.transform.position = slotPos;
-            slotObject.transform.rotation = Quaternion.Euler(plateLineRotationEuler);
-            plateSlots[i] = slotObject.transform;
+            GameObject slotObj = new GameObject($"PlateSlot_{i}");
+            slotObj.transform.SetParent(plateLineRoot);
+            slotObj.transform.position = slotPos;
+            slotObj.transform.rotation = lineRot;
+            plateSlots[i] = slotObj.transform;
 
-            GameObject plateObject = Instantiate(
-                platePrefab,
-                slotPos,
-                Quaternion.Euler(plateLineRotationEuler),
-                plateLineRoot);
-
-            ShootersPlate plate = plateObject.GetComponent<ShootersPlate>();
-            if (plate == null)
-            {
-                plate = plateObject.AddComponent<ShootersPlate>();
-            }
+            GameObject plateObj = Instantiate(platePrefab, slotPos, lineRot, plateLineRoot);
+            ShootersPlate plate = plateObj.GetComponent<ShootersPlate>() ?? plateObj.AddComponent<ShootersPlate>();
 
             plateStack.Add(plate);
         }
 
-        CompactPlates(true);
+        CompactPlates(instant: true);
     }
 
     private void CompactPlates(bool instant)
     {
-        if (plateSlots == null)
-        {
-            return;
-        }
+        if (plateSlots == null) return;
 
         float duration = instant ? 0f : plateMoveDuration;
-        Quaternion lineRotation = Quaternion.Euler(plateLineRotationEuler);
-        int visualSlot = 0;
+        Quaternion lineRot = Quaternion.Euler(plateLineRotationEuler);
 
-        for (int i = 0; i < plateStack.Count && visualSlot < plateSlots.Length; i++)
+        for (int i = 0; i < plateStack.Count && i < plateSlots.Length; i++)
         {
             ShootersPlate plate = plateStack[i];
+            if (plate == null || returningPlates.Contains(plate)) continue;
 
-            if (plate == null || blockedPlates.Contains(plate))
-            {
-                continue;
-            }
-
-            plate.MoveToLine(
-                plateLineRoot,
-                plateSlots[visualSlot].position,
-                lineRotation,
-                duration,
-                Vector3.zero,
-                null);
-
-            visualSlot++;
+            plate.MoveToLine(plateLineRoot, plateSlots[i].position, lineRot, duration, Vector3.zero, null);
         }
     }
 
-    private void MoveSpecificPlateToSlot(
-        ShootersPlate plate,
-        int slotIndex,
-        bool instant,
-        Vector3 spinEuler,
-        System.Action onComplete)
+    private void MoveSpecificPlateToSlot(ShootersPlate plate, int slotIndex, bool instant, Vector3 spinEuler, System.Action onComplete)
     {
-        if (plate == null || plateSlots == null || slotIndex < 0 || slotIndex >= plateSlots.Length)
-        {
-            return;
-        }
-
-        float duration = instant ? 0f : plateMoveDuration;
-        Quaternion lineRotation = Quaternion.Euler(plateLineRotationEuler);
+        if (plate == null || plateSlots == null || slotIndex < 0 || slotIndex >= plateSlots.Length) return;
 
         plate.MoveToLine(
             plateLineRoot,
             plateSlots[slotIndex].position,
-            lineRotation,
-            duration,
+            Quaternion.Euler(plateLineRotationEuler),
+            instant ? 0f : plateMoveDuration,
             spinEuler,
             onComplete);
     }
 
-    private void ClearChildren(Transform t)
+    // ---------------------------------------------------------------
+    // Spline yardýmcýsý
+
+    private Vector3 GetSplineStartWorldPosition(Shooter shooter, Vector3 formationOffset)
     {
-        if (t == null)
+        if (defaultSplinePath?.splineContainer == null)
+            return shooter != null ? shooter.transform.position : Vector3.zero;
+
+        SplineContainer container = defaultSplinePath.splineContainer;
+        if (container.Splines == null || container.Splines.Count == 0)
+            return shooter != null ? shooter.transform.position : Vector3.zero;
+
+        int idx = Mathf.Clamp(defaultSplinePath.splineIndex, 0, container.Splines.Count - 1);
+        Spline spl = container.Splines[idx];
+        Transform root = container.transform;
+
+        float lookAhead = shooter != null ? Mathf.Min(1f, shooter.splineRotationLookAheadT) : 0.03f;
+
+        float3 startLocal = SplineUtility.EvaluatePosition(spl, 0f);
+        Vector3 startWorld = root.TransformPoint(new Vector3(startLocal.x, startLocal.y, startLocal.z));
+
+        if (formationOffset.sqrMagnitude > 0.000001f)
         {
-            return;
+            float3 tanLocal = SplineUtility.EvaluateTangent(spl, lookAhead);
+            float3 upLocal = SplineUtility.EvaluateUpVector(spl, lookAhead);
+
+            Vector3 forward = root.TransformDirection(new Vector3(tanLocal.x, tanLocal.y, tanLocal.z));
+            Vector3 up = root.TransformDirection(new Vector3(upLocal.x, upLocal.y, upLocal.z));
+
+            forward = forward.sqrMagnitude > 0.000001f ? forward.normalized : Vector3.forward;
+            up = up.sqrMagnitude > 0.000001f ? up.normalized : Vector3.up;
+            Vector3 right = Vector3.Cross(up, forward).normalized;
+
+            startWorld += right * formationOffset.x + up * formationOffset.y + forward * formationOffset.z;
         }
 
+        return startWorld;
+    }
+
+    // ---------------------------------------------------------------
+    // Genel yardýmcýlar
+
+    private bool IsValidSlot(int column, int depth) =>
+        slotMatrix != null && column >= 0 && column < columns && depth >= 0 && depth < depthCount;
+
+    private bool IsValidColumn(int column) =>
+        queueGrid != null && column >= 0 && column < columns;
+
+    private Transform GetSlot(int column, int depth) =>
+        IsValidSlot(column, depth) ? slotMatrix[column][depth] : null;
+
+    private void PlayClickSound()
+    {
+        if (shooterClickClip != null && shooterClickSource != null)
+            shooterClickSource.PlayOneShot(shooterClickClip, shooterClickVolume);
+    }
+
+    private void ClearChildren(Transform t)
+    {
+        if (t == null) return;
         for (int i = t.childCount - 1; i >= 0; i--)
-        {
             Destroy(t.GetChild(i).gameObject);
-        }
     }
 }

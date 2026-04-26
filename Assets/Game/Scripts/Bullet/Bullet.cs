@@ -1,6 +1,7 @@
 using UnityEngine;
 
 [RequireComponent(typeof(Collider))]
+[RequireComponent(typeof(AudioSource))]
 public class Bullet : MonoBehaviour
 {
     public float speed = 18f;
@@ -11,15 +12,50 @@ public class Bullet : MonoBehaviour
 
     public float arriveDistance = 0.08f;
 
+    [Header("Audio")]
+    public AudioSource audioSource;
+
+   
+
+    public AudioClip blockHitSound;
+    [Range(0f, 1f)] public float blockHitVolume = 1f;
+
+    public bool use2DSound = true;
+
     private Shooter owner;
     private int lineKey;
     private Block targetBlock;
 
     private bool resolved;
 
+    private void Awake()
+    {
+        if (audioSource == null)
+        {
+            audioSource = GetComponent<AudioSource>();
+        }
+
+        if (audioSource != null)
+        {
+            audioSource.playOnAwake = false;
+            audioSource.volume = 1f;
+
+            if (use2DSound)
+            {
+                audioSource.spatialBlend = 0f; // 2D ses, uzaklýktan kýsýlmaz
+            }
+        }
+    }
+
     private void Start()
     {
-        Destroy(gameObject, lifeTime);
+
+        Invoke(nameof(Expire), lifeTime);
+    }
+
+    private void Expire()
+    {
+        Destroy(gameObject);
     }
 
     public void Init(Shooter ownerShooter, int key, Block target)
@@ -52,7 +88,7 @@ public class Bullet : MonoBehaviour
         {
             bool success = TryHitTarget();
             Resolve(success);
-            Destroy(gameObject);
+            DestroyAfterHit(success);
             return;
         }
 
@@ -82,7 +118,7 @@ public class Bullet : MonoBehaviour
 
         bool success = TryHitTarget();
         Resolve(success);
-        Destroy(gameObject);
+        DestroyAfterHit(success);
     }
 
     private bool TryHitTarget()
@@ -102,8 +138,44 @@ public class Bullet : MonoBehaviour
             return false;
         }
 
+        if (audioSource != null && blockHitSound != null)
+        {
+            audioSource.PlayOneShot(blockHitSound, blockHitVolume);
+        }
+
         BlockGridManager.Instance.DestroyBlockTween(targetBlock, hitDestroyDuration, hitDestroyDelay);
         return true;
+    }
+
+    private void DestroyAfterHit(bool success)
+    {
+        CancelInvoke(nameof(Expire));
+
+        if (!success || blockHitSound == null)
+        {
+            Destroy(gameObject);
+            return;
+        }
+
+        HideBulletVisuals();
+
+        float destroyDelayTime = blockHitSound.length + 0.05f;
+        Destroy(gameObject, destroyDelayTime);
+    }
+
+    private void HideBulletVisuals()
+    {
+        Renderer[] renderers = GetComponentsInChildren<Renderer>();
+        foreach (Renderer r in renderers)
+        {
+            r.enabled = false;
+        }
+
+        Collider[] colliders = GetComponentsInChildren<Collider>();
+        foreach (Collider c in colliders)
+        {
+            c.enabled = false;
+        }
     }
 
     private void OnDestroy()

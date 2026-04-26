@@ -18,7 +18,7 @@ MonoBehaviour:
   queueLayout:
     columnCount: 3
     depthCount: 8
-    origin: {x: 5, y: 0, z: 22}
+    origin: {x: 3, y: 0, z: 22}
     columnStep: {x: 4, y: 0, z: 0}
     depthStep: {x: 0, y: 0, z: 5}
     createSlotObjects: 0

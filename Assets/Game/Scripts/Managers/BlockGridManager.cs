@@ -28,97 +28,64 @@ public class BlockGridManager : MonoBehaviour
 
     public System.Action OnAllBlocksCleared;
 
+    // ---------------------------------------------------------------
     private Dictionary<BlockColor, GameObject> prefabMap;
     private Block[,] gridBlocks;
 
     private float cellSizeX;
     private float cellSizeZ;
     private Vector3 gridOrigin;
+    // ---------------------------------------------------------------
 
-    public Bounds GridBounds
-    {
-        get
-        {
-            return new Bounds(gridCenterWorld, new Vector3(gridWorldSizeX, 5f, gridWorldSizeZ));
-        }
-    }
-   
+    public Bounds GridBounds =>
+        new Bounds(gridCenterWorld, new Vector3(gridWorldSizeX, 5f, gridWorldSizeZ));
+
+
+    public int BuildLineKey(int side, int lineIndex) => side * 100_000 + lineIndex;
+
+    // ---------------------------------------------------------------
+
     private void Awake()
     {
         Instance = this;
         BuildPrefabMap();
     }
 
+    // ---------------------------------------------------------------
+    
+
     private void BuildPrefabMap()
     {
         prefabMap = new Dictionary<BlockColor, GameObject>();
 
-        if (prefabsByColor == null)
+        if (prefabsByColor == null) return;
+
+        foreach (var pair in prefabsByColor)
         {
-            return;
-        }
-
-        for (int i = 0; i < prefabsByColor.Length; i++)
-        {
-            if (prefabsByColor[i] == null)
-            {
-                continue;
-            }
-
-            if (prefabsByColor[i].prefab == null)
-            {
-                continue;
-            }
-
-            prefabMap[prefabsByColor[i].color] = prefabsByColor[i].prefab;
+            if (pair != null && pair.prefab != null)
+                prefabMap[pair.color] = pair.prefab;
         }
     }
 
-    private GameObject GetPrefab(BlockColor c)
+    private GameObject GetPrefab(BlockColor color)
     {
-        if (prefabMap == null)
-        {
-            BuildPrefabMap();
-        }
-
-        if (prefabMap != null && prefabMap.ContainsKey(c))
-        {
-            return prefabMap[c];
-        }
-
-        return null;
+        if (prefabMap == null) BuildPrefabMap();
+        prefabMap.TryGetValue(color, out GameObject prefab);
+        return prefab;
     }
+
+    // ---------------------------------------------------------------
+ 
 
     private void RecalcGridMetrics()
     {
-        if (layout == null)
-        {
-            return;
-        }
-
-        if (layout.width < 1)
-        {
-            layout.width = 1;
-        }
-
-        if (layout.height < 1)
-        {
-            layout.height = 1;
-        }
-
-        if (gridWorldSizeX <= 0f)
-        {
-            gridWorldSizeX = 1f;
-        }
-
-        if (gridWorldSizeZ <= 0f)
-        {
-            gridWorldSizeZ = 1f;
-        }
+        layout.width = Mathf.Max(1, layout.width);
+        layout.height = Mathf.Max(1, layout.height);
+        gridWorldSizeX = Mathf.Max(0.01f, gridWorldSizeX);
+        gridWorldSizeZ = Mathf.Max(0.01f, gridWorldSizeZ);
 
         cellSizeX = gridWorldSizeX / layout.width;
         cellSizeZ = gridWorldSizeZ / layout.height;
-
         gridOrigin = gridCenterWorld - new Vector3(gridWorldSizeX * 0.5f, 0f, gridWorldSizeZ * 0.5f);
     }
 
@@ -129,22 +96,31 @@ public class BlockGridManager : MonoBehaviour
         return new Vector3(px, gridCenterWorld.y, pz);
     }
 
+  
+    private int WorldToGridX(float worldX)
+    {
+        int index = Mathf.FloorToInt((worldX - gridOrigin.x) / cellSizeX);
+        return Mathf.Clamp(index, 0, layout.width - 1);
+    }
+
+    private int WorldToGridZ(float worldZ)
+    {
+        int index = Mathf.FloorToInt((worldZ - gridOrigin.z) / cellSizeZ);
+        return Mathf.Clamp(index, 0, layout.height - 1);
+    }
+
+    // ---------------------------------------------------------------
+  
+
     public void BuildLevel()
     {
-        if (layout == null)
-        {
-            return;
-        }
-
-        BuildPrefabMap();
+        if (layout == null) return;
 
         layout.EnsureCellsSize();
-
         RecalcGridMetrics();
         ClearChildren();
 
         aliveBlockCount = 0;
-
         gridBlocks = new Block[layout.width, layout.height];
 
         for (int y = 0; y < layout.height; y++)
@@ -152,394 +128,183 @@ public class BlockGridManager : MonoBehaviour
             for (int x = 0; x < layout.width; x++)
             {
                 int srcY = (layout.height - 1) - y;
-                BlockColor cellColor = layout.Get(x, srcY);
+                BlockColor color = layout.Get(x, srcY);
 
-                if (cellColor == BlockColor.None)
-                {
-                    continue;
-                }
+                if (color == BlockColor.None) continue;
 
-                GameObject prefab = GetPrefab(cellColor);
-                if (prefab == null)
-                {
-                    continue;
-                }
+                GameObject prefab = GetPrefab(color);
+                if (prefab == null) continue;
 
                 Vector3 pos = GridToWorld(x, y);
                 GameObject inst = Instantiate(prefab, pos, Quaternion.identity, transform);
 
-                float sx = cellSizeX * blockFill;
-                float sz = cellSizeZ * blockFill;
+                inst.transform.localScale = new Vector3(
+                    cellSizeX * blockFill,
+                    blockHeight > 0f ? blockHeight : inst.transform.localScale.y,
+                    cellSizeZ * blockFill);
 
-                Vector3 baseScale = inst.transform.localScale;
-                float yScale = blockHeight > 0f ? blockHeight : baseScale.y;
+                Block block = inst.GetComponent<Block>() ?? inst.AddComponent<Block>();
+                block.color = color;
+                block.gridPos = new Vector2Int(x, y);
+                block.IsDying = false;
+                block.IsTargeted = false;
 
-                inst.transform.localScale = new Vector3(sx, yScale, sz);
-
-                Block b = inst.GetComponent<Block>();
-                if (b == null)
-                {
-                    b = inst.AddComponent<Block>();
-                }
-
-                b.color = cellColor;
-                b.gridPos = new Vector2Int(x, y);
-                b.IsDying = false;
-                b.IsTargeted = false;
-
-                gridBlocks[x, y] = b;
-                aliveBlockCount += 1;
+                gridBlocks[x, y] = block;
+                aliveBlockCount++;
             }
         }
 
-        if (aliveBlockCount <= 0)
-        {
-            aliveBlockCount = 0;
-
-            if (OnAllBlocksCleared != null)
-            {
-                OnAllBlocksCleared();
-            }
-        }
+      
+        if (aliveBlockCount == 0)
+            OnAllBlocksCleared?.Invoke();
     }
 
-    public void DestroyBlockTween(Block blockk, float duration, float delay)
+    // ---------------------------------------------------------------
+ 
+
+    public void DestroyBlockTween(Block block, float duration, float delay)
     {
-        if (blockk == null)
+        if (block == null || block.IsDying) return;
+
+        block.IsDying = true;
+        block.IsTargeted = false;
+
+        var col = block.GetComponent<Collider>();
+        if (col != null) col.enabled = false;
+
+ 
+        Vector2Int pos = block.gridPos;
+        if (gridBlocks != null &&
+            pos.x >= 0 && pos.x < layout.width &&
+            pos.y >= 0 && pos.y < layout.height &&
+            gridBlocks[pos.x, pos.y] == block)
         {
-            return;
+            gridBlocks[pos.x, pos.y] = null;
         }
 
-        if (blockk.IsDying)
-        {
-            return;
-        }
-
-        blockk.IsDying = true;
-        blockk.IsTargeted = false;
-
-        Collider col = blockk.GetComponent<Collider>();
-        if (col != null)
-        {
-            col.enabled = false;
-        }
-
-        if (layout != null && gridBlocks != null)
-        {
-            Vector2Int pos = blockk.gridPos;
-
-            if (pos.x >= 0 && pos.y >= 0 && pos.x < layout.width && pos.y < layout.height)
-            {
-                if (gridBlocks[pos.x, pos.y] == blockk)
-                {
-                    gridBlocks[pos.x, pos.y] = null;
-                }
-            }
-        }
-
-        GameObject obj = blockk.gameObject;
-        if (obj == null)
-        {
-            return;
-        }
-
+        GameObject obj = block.gameObject;
         Transform t = obj.transform;
 
         DOTween.Kill(t);
 
-        Sequence seq = DOTween.Sequence();
-
-        seq.Join(t.DOScale(Vector3.zero, duration).SetEase(Ease.InBack));
-        seq.Join(t.DOMoveY(t.position.y + 0.12f, duration).SetEase(Ease.OutQuad));
-        seq.Join(t.DORotate(new Vector3(0f, 180f, 0f), duration, RotateMode.FastBeyond360).SetEase(Ease.OutQuad));
-
-        seq.SetDelay(delay);
-
-        seq.OnComplete(() =>
-        {
-            aliveBlockCount -= 1;
-
-            if (aliveBlockCount <= 0)
+        DOTween.Sequence()
+            .SetDelay(delay)
+            .Append(t.DOScale(t.localScale * 1.18f, duration * 0.35f).SetEase(Ease.OutQuad))
+            .Append(t.DOScale(Vector3.zero, duration * 0.65f).SetEase(Ease.InBack))
+            .OnComplete(() =>
             {
-                aliveBlockCount = 0;
+                aliveBlockCount = Mathf.Max(0, aliveBlockCount - 1);
 
-                if (OnAllBlocksCleared != null)
-                {
-                    OnAllBlocksCleared();
-                }
-            }
+                if (aliveBlockCount == 0)
+                    OnAllBlocksCleared?.Invoke();
 
-            if (obj != null)
-            {
-                Destroy(obj);
-            }
-        });
+                if (obj != null) Destroy(obj);
+            });
     }
 
-    public int BuildLineKey(int side, int lineIndex)
-    {
-        return side * 100000 + lineIndex;
-    }
+    // ---------------------------------------------------------------
 
-    public bool TryResolveShooterLine(Vector3 shooterPosition, out int side, out int lineIndex)
+
+  
+    public bool TryResolveShooterLine(Vector3 shooterPos, out int side, out int lineIndex)
     {
         side = 0;
         lineIndex = 0;
 
-        if (layout == null)
-        {
-            return false;
-        }
+        if (layout == null) return false;
 
-      // RecalcGridMetrics();
+        Bounds bounds = GridBounds;
 
-        Bounds boundss = GridBounds;
+ 
+        if (shooterPos.x < bounds.min.x) { side = 0; lineIndex = WorldToGridZ(shooterPos.z); return true; }
+        if (shooterPos.x > bounds.max.x) { side = 1; lineIndex = WorldToGridZ(shooterPos.z); return true; }
+        if (shooterPos.z < bounds.min.z) { side = 2; lineIndex = WorldToGridX(shooterPos.x); return true; }
+        if (shooterPos.z > bounds.max.z) { side = 3; lineIndex = WorldToGridX(shooterPos.x); return true; }
 
-        bool outsideLeft = shooterPosition.x < boundss.min.x;
-        bool outsideRight = shooterPosition.x > boundss.max.x;
-        bool outsideBottom = shooterPosition.z < boundss.min.z;
-        bool outsideTop = shooterPosition.z > boundss.max.z;
+   
+        float dl = shooterPos.x - bounds.min.x;
+        float dr = bounds.max.x - shooterPos.x;
+        float db = shooterPos.z - bounds.min.z;
+        float dt = bounds.max.z - shooterPos.z;
 
-        if (outsideLeft)
-        {
-            side = 0;
-            lineIndex = WorldToGridZ(shooterPosition.z);
-            return true;
-        }
+        float minDist = Mathf.Min(dl, dr, db, dt);
 
-        if (outsideRight)
-        {
-            side = 1;
-            lineIndex = WorldToGridZ(shooterPosition.z);
-            return true;
-        }
+        if (Mathf.Approximately(minDist, dl)) side = 0;
+        else if (Mathf.Approximately(minDist, dr)) side = 1;
+        else if (Mathf.Approximately(minDist, db)) side = 2;
+        else side = 3;
 
-        if (outsideBottom)
-        {
-            side = 2;
-            lineIndex = WorldToGridX(shooterPosition.x);
-            return true;
-        }
-
-        if (outsideTop)
-        {
-            side = 3;
-            lineIndex = WorldToGridX(shooterPosition.x);
-            return true;
-        }
-
-        float dl = Mathf.Abs(shooterPosition.x - boundss.min.x);
-        float dr = Mathf.Abs(boundss.max.x - shooterPosition.x);
-        float db = Mathf.Abs(shooterPosition.z - boundss.min.z);
-        float dt = Mathf.Abs(boundss.max.z - shooterPosition.z);
-
-        float min = dl;
-        side = 0;
-
-        if (dr < min)
-        {
-            min = dr;
-            side = 1;
-        }
-
-        if (db < min)
-        {
-            min = db;
-            side = 2;
-        }
-
-        if (dt < min)
-        {
-            min = dt;
-            side = 3;
-        }
-
-        int zIndex = WorldToGridZ(shooterPosition.z);
-        int xIndex = WorldToGridX(shooterPosition.x);
-
-        if (side == 0 || side == 1)
-        {
-            lineIndex = zIndex;
-        }
-        else
-        {
-            lineIndex = xIndex;
-        }
+        lineIndex = (side == 0 || side == 1)
+            ? WorldToGridZ(shooterPos.z)
+            : WorldToGridX(shooterPos.x);
 
         return true;
     }
 
+   
     public bool TryReserveTargetByLine(BlockColor shooterColor, int side, int lineIndex, out Block target)
     {
         target = null;
 
-        if (layout == null || gridBlocks == null)
-        {
-            return false;
-        }
+        if (layout == null || gridBlocks == null) return false;
 
-        Block candidate = null;
+        Block candidate = side switch
+        {
+            0 => FindFirstInRowFromLeft(lineIndex),
+            1 => FindFirstInRowFromRight(lineIndex),
+            2 => FindFirstInColumnFromBottom(lineIndex),
+            3 => FindFirstInColumnFromTop(lineIndex),
+            _ => null
+        };
 
-        if (side == 0)
-        {
-            candidate = FindFirstBlockInRowFromLeft(lineIndex);
-        }
-        else if (side == 1)
-        {
-            candidate = FindFirstBlockInRowFromRight(lineIndex);
-        }
-        else if (side == 2)
-        {
-            candidate = FindFirstBlockInColumnFromBottom(lineIndex);
-        }
-        else if (side == 3)
-        {
-            candidate = FindFirstBlockInColumnFromTop(lineIndex);
-        }
-
-        if (candidate == null)
-        {
-            return false;
-        }
-
-        if (candidate.color != shooterColor)
-        {
-            return false;
-        }
-
-        if (candidate.IsDying)
-        {
-            return false;
-        }
-
-        if (candidate.IsTargeted)
-        {
-            return false;
-        }
+        if (candidate == null || candidate.IsDying || candidate.IsTargeted) return false;
+        if (candidate.color != shooterColor) return false;
 
         candidate.IsTargeted = true;
         target = candidate;
         return true;
     }
 
-  
-    private Block FindFirstBlockInRowFromLeft(int zIndex)
-    {
-        if (zIndex < 0 || zIndex >= layout.height)
-        {
-            return null;
-        }
+    // ---------------------------------------------------------------
+ 
 
+    private Block FindFirstInRowFromLeft(int zIndex)
+    {
+        if (zIndex < 0 || zIndex >= layout.height) return null;
         for (int x = 0; x < layout.width; x++)
-        {
-            Block b = gridBlocks[x, zIndex];
-            if (b != null && !b.IsDying)
-            {
-                return b;
-            }
-        }
-
+            if (gridBlocks[x, zIndex] is { IsDying: false } b) return b;
         return null;
     }
 
-    private Block FindFirstBlockInRowFromRight(int zIndex)
+    private Block FindFirstInRowFromRight(int zIndex)
     {
-        if (zIndex < 0 || zIndex >= layout.height)
-        {
-            return null;
-        }
-
+        if (zIndex < 0 || zIndex >= layout.height) return null;
         for (int x = layout.width - 1; x >= 0; x--)
-        {
-            Block b = gridBlocks[x, zIndex];
-            if (b != null && !b.IsDying)
-            {
-                return b;
-            }
-        }
-
+            if (gridBlocks[x, zIndex] is { IsDying: false } b) return b;
         return null;
     }
 
-    private Block FindFirstBlockInColumnFromBottom(int xIndex)
+    private Block FindFirstInColumnFromBottom(int xIndex)
     {
-        if (xIndex < 0 || xIndex >= layout.width)
-        {
-            return null;
-        }
-
+        if (xIndex < 0 || xIndex >= layout.width) return null;
         for (int z = 0; z < layout.height; z++)
-        {
-            Block b = gridBlocks[xIndex, z];
-            if (b != null && !b.IsDying)
-            {
-                return b;
-            }
-        }
-
+            if (gridBlocks[xIndex, z] is { IsDying: false } b) return b;
         return null;
     }
 
-    private Block FindFirstBlockInColumnFromTop(int xIndex)
+    private Block FindFirstInColumnFromTop(int xIndex)
     {
-        if (xIndex < 0 || xIndex >= layout.width)
-        {
-            return null;
-        }
-
+        if (xIndex < 0 || xIndex >= layout.width) return null;
         for (int z = layout.height - 1; z >= 0; z--)
-        {
-            Block b = gridBlocks[xIndex, z];
-            if (b != null && !b.IsDying)
-            {
-                return b;
-            }
-        }
-
+            if (gridBlocks[xIndex, z] is { IsDying: false } b) return b;
         return null;
     }
 
-    private int WorldToGridX(float worldX)
-    {
-        float local = (worldX - gridOrigin.x) / cellSizeX;
-        int index = Mathf.FloorToInt(local);
-
-        if (index < 0)
-        {
-            index = 0;
-        }
-
-        if (index > layout.width - 1)
-        {
-            index = layout.width - 1;
-        }
-
-        return index;
-    }
-
-    private int WorldToGridZ(float worldZ)
-    {
-        float local = (worldZ - gridOrigin.z) / cellSizeZ;
-        int index = Mathf.FloorToInt(local);
-
-        if (index < 0)
-        {
-            index = 0;
-        }
-
-        if (index > layout.height - 1)
-        {
-            index = layout.height - 1;
-        }
-
-        return index;
-    }
+    // ---------------------------------------------------------------
 
     private void ClearChildren()
     {
         for (int i = transform.childCount - 1; i >= 0; i--)
-        {
             Destroy(transform.GetChild(i).gameObject);
-        }
     }
 }

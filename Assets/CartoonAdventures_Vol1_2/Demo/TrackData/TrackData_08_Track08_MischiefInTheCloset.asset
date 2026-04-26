@@ -1,0 +1,21 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7edcad24e748373449c2cd8a32ef0a88, type: 3}
+  m_Name: TrackData_08_Track08_MischiefInTheCloset
+  m_EditorClassIdentifier: Assembly-CSharp::DeerFunk.CartoonAdventures.MusicTrackData
+  trackName: Mischief in the Closet
+  trackNumber: 8
+  audioClip: {fileID: 8300000, guid: 869112f6ff07ff34caed9357e5806506, type: 3}
+  description: Sneaky exploration music
+  mood: 5
+  duration: 0
+  isLoopable: 1

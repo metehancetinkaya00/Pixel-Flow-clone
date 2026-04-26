@@ -1,0 +1,695 @@
+═══════════════════════════════════════════════════════════════
+CARTOON ADVENTURES VOL. 1-2 - SCRIPT REFERENCE MANUAL
+═══════════════════════════════════════════════════════════════
+
+Version: 1.0
+Release: October 2025
+© 2025 Deer Funk
+
+
+TABLE OF CONTENTS
+═════════════════
+
+1. INTRODUCTION
+2. NAMESPACE AND DEPENDENCIES
+3. CARTOONMUSICMANAGER - Main Music Controller
+   3.1 Overview
+   3.2 Public Properties
+   3.3 Public Methods
+   3.4 Usage Examples
+4. MUSICTRACKDATA - Track Data System
+   4.1 Overview
+   4.2 Public Properties
+   4.3 Public Methods
+   4.4 Creating Track Data Assets
+   4.5 Usage Examples
+5. MUSICDEMOCONTROLLER - Demo Scene Controller
+   5.1 Overview
+   5.2 Public Properties
+   5.3 Public Methods
+   5.4 Usage Examples
+6. EDITOR AUTOMATION TOOLS
+   6.1 TrackDataGenerator
+   6.2 DemoSceneSetup
+   6.3 AudioNormalizer
+7. INTEGRATION GUIDE
+   7.1 Quick Start - No Scripting
+   7.2 Basic Integration
+   7.3 Advanced Integration
+8. TROUBLESHOOTING
+
+
+═══════════════════════════════════════════════════════════════
+1. INTRODUCTION
+═══════════════════════════════════════════════════════════════
+
+This reference manual documents all C# scripts included in the 
+Cartoon Adventures Music Pack. The package contains 3 runtime 
+scripts and 3 editor utility scripts.
+
+Runtime Scripts (for your games):
+• CartoonMusicManager.cs - Music playback controller
+• MusicTrackData.cs - ScriptableObject for track metadata
+• MusicDemoController.cs - Demo scene controller (example)
+
+Editor Scripts (automation tools):
+• TrackDataGenerator.cs - Auto-creates 18 track assets
+• DemoSceneSetup.cs - Auto-sets up demo scene
+• AudioNormalizer.cs - Audio import configuration
+
+
+═══════════════════════════════════════════════════════════════
+2. NAMESPACE AND DEPENDENCIES
+═══════════════════════════════════════════════════════════════
+
+All scripts are contained in the namespace:
+    DeerFunk.CartoonAdventures
+
+Required using statements:
+    using UnityEngine;
+    using DeerFunk.CartoonAdventures;
+
+Optional dependencies:
+    using TMPro; (for TextMeshPro UI in demo)
+
+The package has NO external dependencies. All scripts work with
+Unity's built-in systems.
+
+
+═══════════════════════════════════════════════════════════════
+3. CARTOONMUSICMANAGER - Main Music Controller
+═══════════════════════════════════════════════════════════════
+
+3.1 OVERVIEW
+────────────
+
+CartoonMusicManager is the core music controller component. It 
+provides music playback, fade transitions, volume control, and 
+loop management.
+
+Namespace: DeerFunk.CartoonAdventures
+Inherits: MonoBehaviour
+Requires: AudioSource component (auto-created if missing)
+
+
+3.2 PUBLIC PROPERTIES
+──────────────────────
+
+audioSource (AudioSource)
+    The AudioSource component used for playback.
+    Auto-assigned on Awake if not set.
+
+playOnStart (bool)
+    If true, plays music automatically when scene starts.
+    Default: false
+
+defaultVolume (float)
+    Starting volume for music playback (0.0 to 1.0).
+    Default: 0.7
+
+fadeTime (float)
+    Default fade duration in seconds for transitions.
+    Default: 1.0
+
+
+3.3 PUBLIC METHODS
+──────────────────
+
+PlayMusic(AudioClip clip)
+────────────────────────────────────────────────────────────
+    Plays the specified audio clip immediately.
+    
+    Parameters:
+        clip (AudioClip) - The audio clip to play
+    
+    Returns: void
+    
+    Example:
+        musicManager.PlayMusic(myTrack);
+
+
+PlayMusicWithFade(AudioClip clip, float fadeDuration = 1f)
+────────────────────────────────────────────────────────────
+    Fades out current music, then fades in new clip.
+    
+    Parameters:
+        clip (AudioClip) - The audio clip to play
+        fadeDuration (float) - Fade duration in seconds
+    
+    Returns: void
+    
+    Example:
+        musicManager.PlayMusicWithFade(newTrack, 2.0f);
+
+
+StopMusic()
+────────────────────────────────────────────────────────────
+    Stops music playback immediately.
+    
+    Returns: void
+    
+    Example:
+        musicManager.StopMusic();
+
+
+StopMusicWithFade(float fadeDuration = 1f)
+────────────────────────────────────────────────────────────
+    Fades out and stops music over specified duration.
+    
+    Parameters:
+        fadeDuration (float) - Fade duration in seconds
+    
+    Returns: void
+    
+    Example:
+        musicManager.StopMusicWithFade(1.5f);
+
+
+PauseMusic()
+────────────────────────────────────────────────────────────
+    Pauses music playback at current position.
+    
+    Returns: void
+    
+    Example:
+        musicManager.PauseMusic();
+
+
+ResumeMusic()
+────────────────────────────────────────────────────────────
+    Resumes paused music from current position.
+    
+    Returns: void
+    
+    Example:
+        musicManager.ResumeMusic();
+
+
+SetVolume(float volume)
+────────────────────────────────────────────────────────────
+    Sets the music volume.
+    
+    Parameters:
+        volume (float) - Volume level (0.0 to 1.0)
+    
+    Returns: void
+    
+    Example:
+        musicManager.SetVolume(0.5f);
+
+
+GetVolume()
+────────────────────────────────────────────────────────────
+    Returns the current music volume.
+    
+    Returns: float - Current volume (0.0 to 1.0)
+    
+    Example:
+        float vol = musicManager.GetVolume();
+
+
+IsPlaying()
+────────────────────────────────────────────────────────────
+    Checks if music is currently playing.
+    
+    Returns: bool - True if music is playing
+    
+    Example:
+        if (musicManager.IsPlaying()) { ... }
+
+
+3.4 USAGE EXAMPLES
+──────────────────
+
+Example 1: Basic Setup
+──────────────────────
+using UnityEngine;
+using DeerFunk.CartoonAdventures;
+
+public class GameManager : MonoBehaviour
+{
+    public CartoonMusicManager musicManager;
+    public AudioClip menuMusic;
+    
+    void Start()
+    {
+        musicManager.PlayMusic(menuMusic);
+    }
+}
+
+
+Example 2: Fade Transitions
+────────────────────────────
+public void OnLevelComplete()
+{
+    musicManager.PlayMusicWithFade(victoryMusic, 2.0f);
+}
+
+public void OnGameOver()
+{
+    musicManager.StopMusicWithFade(1.5f);
+}
+
+
+Example 3: Volume Control
+──────────────────────────
+public void OnVolumeSliderChanged(float value)
+{
+    musicManager.SetVolume(value);
+}
+
+
+Example 4: Pause/Resume
+───────────────────────
+public void OnPauseButtonClicked()
+{
+    if (musicManager.IsPlaying())
+        musicManager.PauseMusic();
+    else
+        musicManager.ResumeMusic();
+}
+
+
+═══════════════════════════════════════════════════════════════
+4. MUSICTRACKDATA - Track Data System
+═══════════════════════════════════════════════════════════════
+
+4.1 OVERVIEW
+────────────
+
+MusicTrackData is a ScriptableObject that stores metadata for
+individual music tracks. It provides organized track information
+and utility methods for display.
+
+Namespace: DeerFunk.CartoonAdventures
+Inherits: ScriptableObject
+Menu: Create > Deer Funk > Music Track
+
+
+4.2 PUBLIC PROPERTIES
+──────────────────────
+
+trackName (string)
+    The display name of the track.
+    Example: "Welcome to Toonland"
+
+trackNumber (int)
+    The track number (1-18).
+    Example: 1
+
+audioClip (AudioClip)
+    The actual audio clip reference.
+
+description (string)
+    Brief description of the track's mood/style.
+    Example: "Upbeat cartoon music"
+
+mood (TrackMood enum)
+    The mood category of the track.
+    Values: Upbeat, Funny, Silly, Action, Adventure, 
+            Mysterious, Victory, Menu
+
+duration (float)
+    Track duration in seconds (auto-calculated).
+
+isLoopable (bool)
+    Whether the track is designed to loop.
+    Default: true
+
+
+4.3 PUBLIC METHODS
+──────────────────
+
+GetFormattedName()
+────────────────────────────────────────────────────────────
+    Returns formatted track name with number.
+    
+    Returns: string - Format: "Track 01 - Welcome to Toonland"
+    
+    Example:
+        string name = trackData.GetFormattedName();
+
+
+GetFormattedDuration()
+────────────────────────────────────────────────────────────
+    Returns duration formatted as MM:SS.
+    
+    Returns: string - Format: "01:39"
+    
+    Example:
+        string time = trackData.GetFormattedDuration();
+
+
+4.4 CREATING TRACK DATA ASSETS
+───────────────────────────────
+
+Method 1: Automated (Recommended)
+─────────────────────────────────
+1. Tools > Deer Funk > Generate All Track Data Assets
+2. All 18 assets created automatically in Demo/TrackData/
+
+Method 2: Manual Creation
+─────────────────────────
+1. Right-click in Project window
+2. Create > Deer Funk > Music Track
+3. Name the asset (e.g., "TrackData_01_WelcomeToToonland")
+4. In Inspector, configure:
+   - Track Name: "Welcome to Toonland"
+   - Track Number: 1
+   - Audio Clip: Drag WAV file
+   - Description: "Opening theme - cheerful and welcoming"
+   - Mood: Upbeat
+
+
+4.5 USAGE EXAMPLES
+──────────────────
+
+Example 1: Display Track Info
+──────────────────────────────
+public MusicTrackData currentTrack;
+
+void DisplayTrack()
+{
+    Debug.Log(currentTrack.GetFormattedName());
+    Debug.Log(currentTrack.GetFormattedDuration());
+    Debug.Log($"Mood: {currentTrack.mood}");
+}
+
+
+Example 2: Play Track from Data
+────────────────────────────────
+public MusicTrackData track;
+public CartoonMusicManager musicManager;
+
+void Start()
+{
+    musicManager.PlayMusic(track.audioClip);
+}
+
+
+Example 3: Track Selection System
+──────────────────────────────────
+public MusicTrackData[] allTracks;
+private int currentIndex = 0;
+
+void NextTrack()
+{
+    currentIndex = (currentIndex + 1) % allTracks.Length;
+    musicManager.PlayMusicWithFade(allTracks[currentIndex].audioClip);
+}
+
+
+═══════════════════════════════════════════════════════════════
+5. MUSICDEMOCONTROLLER - Demo Scene Controller
+═══════════════════════════════════════════════════════════════
+
+5.1 OVERVIEW
+────────────
+
+MusicDemoController is the interactive demo scene controller. It
+demonstrates how to use the music system and provides keyboard
+controls for testing tracks. Use this as a reference example.
+
+Namespace: DeerFunk.CartoonAdventures
+Inherits: MonoBehaviour
+
+
+5.2 PUBLIC PROPERTIES
+──────────────────────
+
+musicManager (CartoonMusicManager)
+    Reference to the music manager component.
+
+tracks (MusicTrackData[])
+    Array of all track data assets (size 18).
+
+playOnStart (bool)
+    Auto-plays first track when scene starts.
+    Default: true
+
+Optional UI References:
+    currentTrackText (TextMeshProUGUI)
+    trackDurationText (TextMeshProUGUI)
+    volumeSlider (Slider)
+    playButton, pauseButton, stopButton (Button)
+    nextButton, previousButton (Button)
+
+
+5.3 PUBLIC METHODS
+──────────────────
+
+PlayCurrentTrack()
+    Plays the currently selected track.
+
+LoadAndPlayTrack(int index)
+    Loads and plays track at specified index.
+
+NextTrack()
+    Plays next track in the list.
+
+PreviousTrack()
+    Plays previous track in the list.
+
+TogglePause()
+    Toggles between pause and resume.
+
+StopMusic()
+    Stops music playback.
+
+PlayRandomTrack()
+    Plays a random track from the collection.
+
+
+5.4 USAGE EXAMPLES
+──────────────────
+
+The MusicDemoController script serves as a complete reference
+implementation. See the source code for:
+
+• Track navigation system
+• Keyboard input handling (supports both Input Systems)
+• UI integration examples
+• Track data management
+
+
+═══════════════════════════════════════════════════════════════
+6. EDITOR AUTOMATION TOOLS
+═══════════════════════════════════════════════════════════════
+
+6.1 TRACKDATAGENERATOR
+──────────────────────
+
+Location: Scripts/Editor/TrackDataGenerator.cs
+Menu: Tools > Deer Funk > Generate All Track Data Assets
+
+Functionality:
+• Automatically creates 18 MusicTrackData assets
+• Assigns audio clips from Audio/WAV/ folder
+• Sets names, numbers, descriptions, moods
+• Saves to Demo/TrackData/ folder
+
+Usage:
+1. Click Tools > Deer Funk > Generate All Track Data Assets
+2. Wait for completion dialog
+3. All 18 track assets created automatically
+
+
+6.2 DEMOSCENESETUP
+──────────────────
+
+Location: Scripts/Editor/DemoSceneSetup.cs
+Menu: Tools > Deer Funk > Setup Demo Scene (Auto)
+
+Functionality:
+• Creates MusicManager GameObject
+• Creates DemoController GameObject
+• Auto-assigns all 18 TrackData assets
+• Connects references automatically
+
+Usage:
+1. Open your scene
+2. Click Tools > Deer Funk > Setup Demo Scene (Auto)
+3. Demo scene ready to test
+
+
+6.3 AUDIONORMALIZER
+───────────────────
+
+Location: Scripts/Editor/AudioNormalizer.cs
+Menu: Tools > Deer Funk > Set Audio to PCM (Step 1)
+      Tools > Deer Funk > Audio Settings Info
+
+Functionality:
+• Sets audio import format to PCM
+• Displays current audio settings
+• Helps with Asset Store audio requirements
+
+Usage:
+1. Click Tools > Deer Funk > Set Audio to PCM (Step 1)
+2. All WAV files configured for PCM format
+
+
+═══════════════════════════════════════════════════════════════
+7. INTEGRATION GUIDE
+═══════════════════════════════════════════════════════════════
+
+7.1 QUICK START - NO SCRIPTING
+───────────────────────────────
+
+For simple background music without code:
+
+1. Select any GameObject in your scene
+2. Add Component > Audio > Audio Source
+3. Drag a track from Audio/WAV/ to AudioClip field
+4. Check "Loop" and "Play On Awake"
+5. Press Play - music plays automatically
+
+
+7.2 BASIC INTEGRATION
+──────────────────────
+
+For basic scripted control:
+
+Step 1: Setup
+─────────────
+1. Create empty GameObject named "MusicManager"
+2. Add Component: CartoonMusicManager
+
+Step 2: Your Script
+───────────────────
+using UnityEngine;
+using DeerFunk.CartoonAdventures;
+
+public class MyGameManager : MonoBehaviour
+{
+    public CartoonMusicManager musicManager;
+    public AudioClip backgroundMusic;
+    
+    void Start()
+    {
+        musicManager.PlayMusic(backgroundMusic);
+    }
+}
+
+Step 3: Inspector Setup
+───────────────────────
+1. Drag MusicManager GameObject to musicManager field
+2. Drag a WAV file to backgroundMusic field
+3. Done!
+
+
+7.3 ADVANCED INTEGRATION
+─────────────────────────
+
+For advanced track management with metadata:
+
+using UnityEngine;
+using DeerFunk.CartoonAdventures;
+
+public class AdvancedMusicSystem : MonoBehaviour
+{
+    public CartoonMusicManager musicManager;
+    public MusicTrackData[] levelTracks;
+    
+    private int currentLevel = 0;
+    
+    void Start()
+    {
+        PlayLevelMusic(0);
+    }
+    
+    public void PlayLevelMusic(int levelIndex)
+    {
+        if (levelIndex >= 0 && levelIndex < levelTracks.Length)
+        {
+            var track = levelTracks[levelIndex];
+            musicManager.PlayMusicWithFade(track.audioClip, 2f);
+            
+            Debug.Log($"Now playing: {track.GetFormattedName()}");
+            Debug.Log($"Duration: {track.GetFormattedDuration()}");
+        }
+    }
+    
+    public void OnLevelComplete()
+    {
+        currentLevel++;
+        PlayLevelMusic(currentLevel);
+    }
+    
+    public void OnPause()
+    {
+        musicManager.SetVolume(0.3f); // Lower volume during pause
+    }
+    
+    public void OnResume()
+    {
+        musicManager.SetVolume(0.7f); // Restore volume
+    }
+}
+
+
+═══════════════════════════════════════════════════════════════
+8. TROUBLESHOOTING
+═══════════════════════════════════════════════════════════════
+
+Problem: Music not playing
+──────────────────────────
+Solution:
+• Check AudioSource has clip assigned
+• Verify volume > 0
+• Check Audio Listener exists in scene
+• Verify no mute settings in Audio Mixer
+
+
+Problem: Scripts showing errors
+────────────────────────────────
+Solution:
+• Ensure "using DeerFunk.CartoonAdventures;" is included
+• Check namespace spelling
+• Verify scripts are in correct folders
+
+
+Problem: Demo keyboard controls not working
+────────────────────────────────────────────
+Solution:
+• Click on Game window to give it focus
+• Check Input System settings in Player Settings
+• Script supports both old and new Input Systems
+
+
+Problem: Fade transitions not smooth
+─────────────────────────────────────
+Solution:
+• Increase fade duration parameter
+• Check frame rate (low FPS affects smoothness)
+• Verify no other volume changes happening simultaneously
+
+
+Problem: Tools menu not showing
+────────────────────────────────
+Solution:
+• Wait for Unity to finish compiling
+• Check bottom-right corner for compilation status
+• Verify Editor scripts are in "Editor" folder
+• Reimport the Scripts/Editor folder
+
+
+Problem: Audio files stuttering
+────────────────────────────────
+Solution:
+• Set Load Type to "Streaming" in Import Settings
+• Reduce Quality setting if needed
+• Check available RAM
+
+
+═══════════════════════════════════════════════════════════════
+
+END OF SCRIPT REFERENCE MANUAL
+
+For additional support or questions, please contact through
+Unity Asset Store messaging.
+
+© 2025 Deer Funk
+All Rights Reserved
+
+═══════════════════════════════════════════════════════════════

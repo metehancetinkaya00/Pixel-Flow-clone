@@ -5,7 +5,7 @@ using System.Collections.Generic;
 
 [CustomEditor(typeof(LevelLayout))]
 public class LevelLayoutEditor : Editor
-{
+{///
     private BlockColor paintColor = BlockColor.Pink;
     private bool isPainting;
     private int paintButton;
