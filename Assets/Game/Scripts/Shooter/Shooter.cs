@@ -28,6 +28,10 @@ public class Shooter : MonoBehaviour
     public float bulletFireCooldown = 0.15f;
     public GameObject bulletPrefab;
     public Transform bulletSpawnPoint;
+    public Transform fireBounceTarget;
+    public Vector3 fireBounceLocalOffset = new Vector3(0f, 0f, -0.08f);
+    public float fireBounceDuration = 0.12f;
+
 
     public float rotationSpeedDegPerSec = 720f;
 
@@ -67,13 +71,19 @@ public class Shooter : MonoBehaviour
 
     private Quaternion rotationTarget;
     // ---------------------------------------------------------------
-
+    private Vector3 fireBounceStartLocalPosition;
     private void Awake()
     {
         shotsRemaining = shotsTotal;
         rotationTarget = transform.rotation;
         formationOffset = Vector3.zero;
         keepFormationOffsetOnSpline = true;
+
+        if (fireBounceTarget != null)
+        {
+            fireBounceStartLocalPosition = fireBounceTarget.localPosition;
+        }
+
         UpdateShotsText();
     }
 
@@ -228,12 +238,9 @@ public class Shooter : MonoBehaviour
 
         DOTween.Kill(transform);
 
-        Vector3 jumpSpinTarget = toSplineJumpRotationEuler + new Vector3(0f, toSplineJumpExtraSpinY, 0f);
-
-        DOTween.Sequence()
-            .Join(transform.DOJump(startWorld, toSplineJumpPower, toSplineJumpNumJumps, toSplineJumpDuration).SetEase(Ease.OutQuad))
-            .Join(transform.DORotate(jumpSpinTarget, toSplineJumpDuration, RotateMode.FastBeyond360).SetEase(Ease.OutQuad))
-            .OnComplete(() => jumpDone = true);
+        Sequence startSeq = DOTween.Sequence();
+        startSeq.Append(transform.DOJump(startWorld, toSplineJumpPower, toSplineJumpNumJumps, toSplineJumpDuration).SetEase(Ease.OutQuad));
+        startSeq.OnComplete(() => jumpDone = true);
 
         while (!jumpDone)
         {
@@ -320,8 +327,22 @@ public class Shooter : MonoBehaviour
     }
 
     // ---------------------------------------------------------------
-   
+    private void PlayFireBounce()
+    {
+        if (fireBounceTarget == null)
+        {
+            return;
+        }
 
+        DOTween.Kill(fireBounceTarget);
+
+        fireBounceTarget.localPosition = fireBounceStartLocalPosition;
+
+        Sequence seq = DOTween.Sequence();
+        seq.Append(fireBounceTarget.DOLocalMove(fireBounceStartLocalPosition + fireBounceLocalOffset, fireBounceDuration * 0.35f).SetEase(Ease.OutQuad));
+        seq.Append(fireBounceTarget.DOLocalMove(fireBounceStartLocalPosition, fireBounceDuration * 0.65f).SetEase(Ease.OutBack));
+    }
+    
     private IEnumerator ShootLoop()
     {
         while (true)
@@ -377,6 +398,7 @@ public class Shooter : MonoBehaviour
         if (shotsRemaining <= 0) destroyWhenNoPending = true;
 
         bullet.Init(this, lineKey, target);
+        PlayFireBounce();
         return true;
     }
 
@@ -425,7 +447,7 @@ public class Shooter : MonoBehaviour
     }
 
     // ---------------------------------------------------------------
-
+    
     private void UpdateShotsText()
     {
         if (shotsText != null) shotsText.text = shotsRemaining.ToString();

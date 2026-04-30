@@ -4092,9 +4092,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 555e6cf7e903938439af08d165b7c2ed, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ShooterQueueManager
-  shooterClickClip: {fileID: 8300000, guid: b9af7bbd676ec443bb7cee6b03b0240d, type: 3}
-  shooterClickSource: {fileID: 330585548}
-  shooterClickVolume: 1
   runtimeQueueRoot: {fileID: 2133296050}
   frontSlots:
   - {fileID: 845552131}
@@ -4112,12 +4109,15 @@ MonoBehaviour:
   plateLineOrigin: {x: 17, y: 1, z: 9}
   plateLineStep: {x: 0.5, y: 0, z: 0}
   plateLineRotationEuler: {x: 0, y: 0, z: -90}
-  plateChildLocalOffset: {x: 0, y: 0, z: 0}
+  plateChildLocalOffset: {x: 0, y: 1, z: 0}
   plateChildLocalRotationEuler: {x: 0, y: 0, z: 0}
   plateMoveDuration: 0.5
   plateAttachDuration: 0.5
   platePickupSpinEuler: {x: 0, y: 0, z: 0}
   plateReturnSpinEuler: {x: 0, y: 0, z: 0}
+  shooterClickClip: {fileID: 8300000, guid: b9af7bbd676ec443bb7cee6b03b0240d, type: 3}
+  shooterClickSource: {fileID: 330585548}
+  shooterClickVolume: 1
 --- !u!4 &1614747628
 Transform:
   m_ObjectHideFlags: 0
@@ -4145,14 +4145,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9674082424211524aa3618ff66f64696, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::LevelFlowManager
-  audioSource: {fileID: 330585548}
-  soundd: {fileID: 8300000, guid: e195dd714e6c6a64daa5c667820bfefb, type: 3}
-  volume: 0.787
-  use2DSound: 1
   database: {fileID: 11400000, guid: 9013f9c35c5a90641868659acf157ffe, type: 2}
+  startLevelIndex: 0
   splinePathsInScene:
   - {fileID: 1292444190}
-  startLevelIndex: 0
+  audioSource: {fileID: 330585548}
+  startSound: {fileID: 0}
+  volume: 0.787
+  use2DSound: 1
 --- !u!114 &1614747630
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -4692,7 +4692,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0.89131, y: -1.36, z: -13.2}
-  m_LocalScale: {x: 10, y: 1, z: 9}
+  m_LocalScale: {x: 39.9, y: 1, z: 9}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
