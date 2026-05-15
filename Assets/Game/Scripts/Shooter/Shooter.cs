@@ -9,56 +9,60 @@ using Unity.Mathematics;
 [RequireComponent(typeof(Collider))]
 public class Shooter : MonoBehaviour
 {
-    private Vector3 formationOffset;
-    private bool keepFormationOffsetOnSpline;
-    public Vector3 FormationOffset => formationOffset;
-
-    [Header("Visual")]
-    public Color linkColor = Color.white;
+    [Header("Identity")]
     public BlockColor shooterColor;
+    public Color linkColor = Color.white;
     public int linkGroupId = 0;
 
-    public bool IsBusy;
-    public bool IsAlive = true;
-
+    [Header("Shots")]
     public int shotsTotal = 5;
-    public int shotsRemaining;
     public TMP_Text shotsText;
-
     public float bulletFireCooldown = 0.15f;
     public GameObject bulletPrefab;
     public Transform bulletSpawnPoint;
+
+    [Header("Fire Bounce")]
     public Transform fireBounceTarget;
     public Vector3 fireBounceLocalOffset = new Vector3(0f, 0f, -0.08f);
     public float fireBounceDuration = 0.12f;
 
-
+    [Header("Rotation")]
     public float rotationSpeedDegPerSec = 720f;
 
+    [Header("Jump to Spline")]
     public float toSplineJumpDuration = 0.35f;
     public float toSplineJumpPower = 1.2f;
     public int toSplineJumpNumJumps = 1;
     public Vector3 toSplineJumpRotationEuler;
     public float toSplineJumpExtraSpinY = 360f;
 
+    [Header("Spline Rotation")]
     public bool useSplineTangentRotation = true;
     public bool invertSplineTangent = false;
     public Vector3 splineRotationOffsetEuler;
     public Vector3 splineFixedRotationEuler;
     public float splineRotationLookAheadT = 0.03f;
 
+    [Header("Jump to Front Slot")]
     public float frontJumpDuration = 0.35f;
     public float frontJumpPower = 1.2f;
     public int frontJumpNumJumps = 1;
     public Vector3 frontJumpRotationEuler;
     public float frontJumpExtraSpinY = 360f;
 
+    [Header("Destroy FX")]
     public float destroyDuration = 0.22f;
     public float destroyDelay = 0f;
-    public float destroySpinY = 360f;
     public float destroyMoveUp = 0.15f;
 
-    // ---------------------------------------------------------------
+    public bool IsBusy { get; private set; }
+    public bool IsAlive { get; private set; } = true;
+    public int shotsRemaining { get; private set; }
+    public Vector3 FormationOffset => formationOffset;
+
+    private Vector3 formationOffset;
+    private bool keepFormationOffsetOnSpline;
+
     private Coroutine moveRoutine;
     private Coroutine shootRoutine;
 
@@ -66,12 +70,12 @@ public class Shooter : MonoBehaviour
     private bool isMoving;
     private bool destroyWhenNoPending;
 
-    private readonly HashSet<int> lockedDepthLines = new HashSet<int>();
+    private readonly HashSet<int> lockedLines = new HashSet<int>();
     private readonly Dictionary<int, Block> pendingTargets = new Dictionary<int, Block>();
 
     private Quaternion rotationTarget;
-    // ---------------------------------------------------------------
-    private Vector3 fireBounceStartLocalPosition;
+    private Vector3 fireBounceStartLocalPos;
+
     private void Awake()
     {
         shotsRemaining = shotsTotal;
@@ -80,9 +84,7 @@ public class Shooter : MonoBehaviour
         keepFormationOffsetOnSpline = true;
 
         if (fireBounceTarget != null)
-        {
-            fireBounceStartLocalPosition = fireBounceTarget.localPosition;
-        }
+            fireBounceStartLocalPos = fireBounceTarget.localPosition;
 
         UpdateShotsText();
     }
@@ -94,23 +96,22 @@ public class Shooter : MonoBehaviour
         UpdateShotsText();
     }
 
-    // ---------------------------------------------------------------
  
 
     public void StartMoveOnSpline(SplinePathDefinition path, System.Action onFinished) =>
-        StartMoveOnSpline(path, Vector3.zero, true, null, onFinished);
+        StartMoveOnSpline(path, Vector3.zero, keepOffset: true, onSplineReached: null, onFinished);
 
     public void StartMoveOnSpline(SplinePathDefinition path, Vector3 offset, System.Action onFinished) =>
-        StartMoveOnSpline(path, offset, true, null, onFinished);
+        StartMoveOnSpline(path, offset, keepOffset: true, onSplineReached: null, onFinished);
 
-    public void StartMoveOnSpline(SplinePathDefinition path, Vector3 offset, System.Action onReachedStart, System.Action onFinished) =>
-        StartMoveOnSpline(path, offset, true, onReachedStart, onFinished);
+    public void StartMoveOnSpline(SplinePathDefinition path, Vector3 offset, System.Action onSplineReached, System.Action onFinished) =>
+        StartMoveOnSpline(path, offset, keepOffset: true, onSplineReached, onFinished);
 
     public void StartMoveOnSpline(
         SplinePathDefinition path,
         Vector3 offset,
-        bool keepOffsetOnSpline,
-        System.Action onReachedStart,
+        bool keepOffset,
+        System.Action onSplineReached,
         System.Action onFinished)
     {
         if (!IsAlive || IsBusy) return;
@@ -120,16 +121,14 @@ public class Shooter : MonoBehaviour
         if (path?.splineContainer == null) return;
 
         formationOffset = offset;
-        keepFormationOffsetOnSpline = keepOffsetOnSpline;
+        keepFormationOffsetOnSpline = keepOffset;
         IsBusy = true;
 
         if (moveRoutine != null) StopCoroutine(moveRoutine);
-        moveRoutine = StartCoroutine(MoveAlongSpline(path, onReachedStart, onFinished));
+        moveRoutine = StartCoroutine(MoveAlongSpline(path, onSplineReached, onFinished));
     }
 
-    // ---------------------------------------------------------------
-
-
+   
     public void JumpToFrontSlot(Vector3 targetPos, System.Action onFinished)
     {
         if (!IsAlive) return;
@@ -145,14 +144,13 @@ public class Shooter : MonoBehaviour
             .OnComplete(() =>
             {
                 if (!IsAlive) return;
-                transform.position = targetPos;
-                transform.rotation = Quaternion.Euler(frontJumpRotationEuler);
+                transform.SetPositionAndRotation(targetPos, Quaternion.Euler(frontJumpRotationEuler));
                 IsBusy = false;
                 onFinished?.Invoke();
             });
     }
 
-
+    
     public void ShiftToFrontSlot(Vector3 targetPos, System.Action onFinished)
     {
         if (!IsAlive) return;
@@ -160,30 +158,70 @@ public class Shooter : MonoBehaviour
         IsBusy = true;
         DOTween.Kill(transform);
 
-        Quaternion savedRot = transform.rotation;
+        Quaternion savedRotation = transform.rotation;
 
         transform.DOJump(targetPos, frontJumpPower, frontJumpNumJumps, frontJumpDuration)
             .SetEase(Ease.OutQuad)
             .OnComplete(() =>
             {
                 if (!IsAlive) return;
-                transform.position = targetPos;
-                transform.rotation = savedRot;
+                transform.SetPositionAndRotation(targetPos, savedRotation);
                 IsBusy = false;
                 onFinished?.Invoke();
             });
     }
 
-    // ---------------------------------------------------------------
-  
 
-    private IEnumerator MoveAlongSpline(SplinePathDefinition path, System.Action onReachedStart, System.Action onFinished)
+    public void OnBulletResolved(int lineKey, bool success)
+    {
+        if (!IsAlive) return;
+
+        if (pendingTargets.TryGetValue(lineKey, out Block block))
+        {
+            pendingTargets.Remove(lineKey);
+            if (!success && block != null && !block.IsDying)
+                block.IsTargeted = false;
+        }
+
+        if (success) lockedLines.Add(lineKey);
+
+        if (destroyWhenNoPending && pendingTargets.Count == 0)
+            DestroySelf();
+    }
+
+
+
+    public void DestroySelf()
+    {
+        if (!IsAlive) return;
+
+        IsAlive = false;
+        IsBusy = false;
+
+        ReleaseAllPendingTargets();
+
+        if (moveRoutine != null) { StopCoroutine(moveRoutine); moveRoutine = null; }
+        StopShooting();
+
+        ShooterQueueManager.Instance?.NotifyShooterDestroyed(this);
+        DOTween.Kill(transform);
+
+        DOTween.Sequence()
+            .SetDelay(destroyDelay)
+            .Join(transform.DOMove(transform.position + Vector3.up * destroyMoveUp, destroyDuration).SetEase(Ease.OutQuad))
+            .Join(transform.DOScale(Vector3.zero, destroyDuration).SetEase(Ease.InBack))
+            .OnComplete(() => Destroy(gameObject));
+    }
+
+   
+
+    private IEnumerator MoveAlongSpline(SplinePathDefinition path, System.Action onSplineReached, System.Action onFinished)
     {
         canShoot = false;
         isMoving = false;
         destroyWhenNoPending = false;
 
-        lockedDepthLines.Clear();
+        lockedLines.Clear();
         ReleaseAllPendingTargets();
 
         StopShooting();
@@ -203,44 +241,28 @@ public class Shooter : MonoBehaviour
         Transform root = container.transform;
 
         Vector3 scale = root.lossyScale;
-        float4x4 mat = float4x4.TRS(root.position, root.rotation, new float3(scale.x, scale.y, scale.z));
-        float splineLength = SplineUtility.CalculateLength(spline, mat);
+        float4x4 localToWorld = float4x4.TRS(root.position, root.rotation, new float3(scale.x, scale.y, scale.z));
+        float splineLength = SplineUtility.CalculateLength(spline, localToWorld);
 
         float lookAhead = Mathf.Min(1f, splineRotationLookAheadT);
         bool hasEntryOffset = formationOffset.sqrMagnitude > 0.000001f;
         bool hasSplineOffset = keepFormationOffsetOnSpline && hasEntryOffset;
 
-        Quaternion jumpEndRot = Quaternion.Euler(toSplineJumpRotationEuler);
-        Quaternion fixedRot = Quaternion.Euler(splineFixedRotationEuler);
+        Quaternion jumpEndRotation = Quaternion.Euler(toSplineJumpRotationEuler);
+        Quaternion fixedRotation = Quaternion.Euler(splineFixedRotationEuler);
         Quaternion splineOffsetRot = Quaternion.Euler(splineRotationOffsetEuler);
 
-
-        float3 startLocal = SplineUtility.EvaluatePosition(spline, 0f);
-        Vector3 startWorld = root.TransformPoint(new Vector3(startLocal.x, startLocal.y, startLocal.z));
+        Vector3 startWorld = EvaluateSplineWorldPos(spline, root, 0f);
 
         if (hasEntryOffset)
-        {
-            float3 tanLocal = SplineUtility.EvaluateTangent(spline, lookAhead);
-            float3 upLocal = SplineUtility.EvaluateUpVector(spline, lookAhead);
-
-            Vector3 fwd = root.TransformDirection(new Vector3(tanLocal.x, tanLocal.y, tanLocal.z));
-            Vector3 up = root.TransformDirection(new Vector3(upLocal.x, upLocal.y, upLocal.z));
-
-            fwd = fwd.sqrMagnitude > 0.000001f ? fwd.normalized : Vector3.forward;
-            up = up.sqrMagnitude > 0.000001f ? up.normalized : Vector3.up;
-
-            Vector3 right = Vector3.Cross(up, fwd).normalized;
-            startWorld += right * formationOffset.x + up * formationOffset.y + fwd * formationOffset.z;
-        }
+            startWorld += CalculateFormationWorldOffset(spline, root, lookAhead, formationOffset);
 
       
         bool jumpDone = false;
-
         DOTween.Kill(transform);
-
-        Sequence startSeq = DOTween.Sequence();
-        startSeq.Append(transform.DOJump(startWorld, toSplineJumpPower, toSplineJumpNumJumps, toSplineJumpDuration).SetEase(Ease.OutQuad));
-        startSeq.OnComplete(() => jumpDone = true);
+        transform.DOJump(startWorld, toSplineJumpPower, toSplineJumpNumJumps, toSplineJumpDuration)
+            .SetEase(Ease.OutQuad)
+            .OnComplete(() => jumpDone = true);
 
         while (!jumpDone)
         {
@@ -248,9 +270,8 @@ public class Shooter : MonoBehaviour
             yield return null;
         }
 
-        transform.position = startWorld;
-        transform.rotation = jumpEndRot;
-        onReachedStart?.Invoke();
+        transform.SetPositionAndRotation(startWorld, jumpEndRotation);
+        onSplineReached?.Invoke();
         canShoot = true;
 
         if (splineLength <= 0.0001f)
@@ -261,7 +282,7 @@ public class Shooter : MonoBehaviour
             yield break;
         }
 
-     
+      
         float t = 0f;
 
         while (t < 1f)
@@ -271,22 +292,14 @@ public class Shooter : MonoBehaviour
             isMoving = true;
             t = Mathf.Min(1f, t + (path.moveSpeed / splineLength) * Time.deltaTime);
 
-            float3 posLocal = SplineUtility.EvaluatePosition(spline, t);
-            Vector3 posWorld = root.TransformPoint(new Vector3(posLocal.x, posLocal.y, posLocal.z));
+            Vector3 posWorld = EvaluateSplineWorldPos(spline, root, t);
             Vector3 forwardDir = transform.forward;
             Vector3 upDir = Vector3.up;
 
             if (hasSplineOffset || useSplineTangentRotation)
             {
-                float tRot = Mathf.Min(1f, t + splineRotationLookAheadT);
-                float3 tanLocal = SplineUtility.EvaluateTangent(spline, tRot);
-                float3 upLocal = SplineUtility.EvaluateUpVector(spline, tRot);
-
-                Vector3 tanWorld = root.TransformDirection(new Vector3(tanLocal.x, tanLocal.y, tanLocal.z));
-                Vector3 upWorld = root.TransformDirection(new Vector3(upLocal.x, upLocal.y, upLocal.z));
-
-                forwardDir = tanWorld.sqrMagnitude > 0.000001f ? tanWorld.normalized : transform.forward;
-                upDir = upWorld.sqrMagnitude > 0.000001f ? upWorld.normalized : Vector3.up;
+                float tLook = Mathf.Min(1f, t + splineRotationLookAheadT);
+                GetSplineTangentAndUp(spline, root, tLook, out forwardDir, out upDir);
 
                 if (hasSplineOffset)
                 {
@@ -299,7 +312,7 @@ public class Shooter : MonoBehaviour
 
             rotationTarget = useSplineTangentRotation
                 ? Quaternion.LookRotation(invertSplineTangent ? -forwardDir : forwardDir, upDir) * splineOffsetRot
-                : fixedRot;
+                : fixedRotation;
 
             StepRotation();
             yield return null;
@@ -311,38 +324,6 @@ public class Shooter : MonoBehaviour
         onFinished?.Invoke();
     }
 
-    private void StepRotation()
-    {
-        transform.rotation = Quaternion.RotateTowards(
-            transform.rotation,
-            rotationTarget,
-            rotationSpeedDegPerSec * Time.deltaTime);
-    }
-
-    private void StopShooting()
-    {
-        if (shootRoutine == null) return;
-        StopCoroutine(shootRoutine);
-        shootRoutine = null;
-    }
-
-    // ---------------------------------------------------------------
-    private void PlayFireBounce()
-    {
-        if (fireBounceTarget == null)
-        {
-            return;
-        }
-
-        DOTween.Kill(fireBounceTarget);
-
-        fireBounceTarget.localPosition = fireBounceStartLocalPosition;
-
-        Sequence seq = DOTween.Sequence();
-        seq.Append(fireBounceTarget.DOLocalMove(fireBounceStartLocalPosition + fireBounceLocalOffset, fireBounceDuration * 0.35f).SetEase(Ease.OutQuad));
-        seq.Append(fireBounceTarget.DOLocalMove(fireBounceStartLocalPosition, fireBounceDuration * 0.65f).SetEase(Ease.OutBack));
-    }
-    
     private IEnumerator ShootLoop()
     {
         while (true)
@@ -352,32 +333,37 @@ public class Shooter : MonoBehaviour
             if (shotsRemaining <= 0)
             {
                 destroyWhenNoPending = true;
+
                 if (pendingTargets.Count == 0) { DestroySelf(); yield break; }
+
                 yield return null;
                 continue;
             }
 
-            if (canShoot && isMoving && BlockGridManager.Instance != null)
-            {
-                if (BlockGridManager.Instance.TryResolveShooterLine(transform.position, out int side, out int lineIndex))
-                {
-                    int lineKey = BlockGridManager.Instance.BuildLineKey(side, lineIndex);
-
-                    if (!lockedDepthLines.Contains(lineKey) && !pendingTargets.ContainsKey(lineKey))
-                    {
-                        if (BlockGridManager.Instance.TryReserveTargetByLine(shooterColor, side, lineIndex, out Block target))
-                        {
-                            if (FireBullet(target, lineKey))
-                                pendingTargets[lineKey] = target;
-                            else if (target != null && !target.IsDying)
-                                target.IsTargeted = false;
-                        }
-                    }
-                }
-            }
+            TryFireAtCurrentLine();
 
             yield return new WaitForSeconds(bulletFireCooldown);
         }
+    }
+
+    private void TryFireAtCurrentLine()
+    {
+        if (!canShoot || !isMoving || BlockGridManager.Instance == null) return;
+
+        if (!BlockGridManager.Instance.TryResolveShooterLine(transform.position, out int side, out int lineIndex))
+            return;
+
+        int lineKey = BlockGridManager.Instance.BuildLineKey(side, lineIndex);
+
+        if (lockedLines.Contains(lineKey) || pendingTargets.ContainsKey(lineKey)) return;
+
+        if (!BlockGridManager.Instance.TryReserveTargetByLine(shooterColor, side, lineIndex, out Block target))
+            return;
+
+        if (FireBullet(target, lineKey))
+            pendingTargets[lineKey] = target;
+        else if (target != null && !target.IsDying)
+            target.IsTargeted = false;
     }
 
     private bool FireBullet(Block target, int lineKey)
@@ -402,52 +388,35 @@ public class Shooter : MonoBehaviour
         return true;
     }
 
+   
 
-    public void OnBulletResolved(int lineKey, bool success)
+    private void StepRotation()
     {
-        if (!IsAlive) return;
-
-        if (pendingTargets.TryGetValue(lineKey, out Block block))
-        {
-            pendingTargets.Remove(lineKey);
-            if (!success && block != null && !block.IsDying)
-                block.IsTargeted = false;
-        }
-
-        if (success) lockedDepthLines.Add(lineKey);
-
-        if (destroyWhenNoPending && pendingTargets.Count == 0)
-            DestroySelf();
+        transform.rotation = Quaternion.RotateTowards(
+            transform.rotation,
+            rotationTarget,
+            rotationSpeedDegPerSec * Time.deltaTime);
     }
 
-    // ---------------------------------------------------------------
- 
-
-    public void DestroySelf()
+    private void StopShooting()
     {
-        if (!IsAlive) return;
+        if (shootRoutine == null) return;
+        StopCoroutine(shootRoutine);
+        shootRoutine = null;
+    }
 
-        ReleaseAllPendingTargets();
-        IsAlive = false;
+    private void PlayFireBounce()
+    {
+        if (fireBounceTarget == null) return;
 
-        if (moveRoutine != null) { StopCoroutine(moveRoutine); moveRoutine = null; }
-        StopShooting();
-        IsBusy = false;
-
-        ShooterQueueManager.Instance?.NotifyShooterDestroyed(this);
-
-        DOTween.Kill(transform);
+        DOTween.Kill(fireBounceTarget);
+        fireBounceTarget.localPosition = fireBounceStartLocalPos;
 
         DOTween.Sequence()
-            .SetDelay(destroyDelay)
-            .Join(transform.DOMove(transform.position + Vector3.up * destroyMoveUp, destroyDuration).SetEase(Ease.OutQuad))
-            .Join(transform.DOScale(Vector3.zero, destroyDuration).SetEase(Ease.InBack))
-            .Join(transform.DORotate(new Vector3(0f, destroySpinY, 0f), destroyDuration, RotateMode.FastBeyond360).SetEase(Ease.OutQuad))
-            .OnComplete(() => { if (gameObject != null) Destroy(gameObject); });
+            .Append(fireBounceTarget.DOLocalMove(fireBounceStartLocalPos + fireBounceLocalOffset, fireBounceDuration * 0.35f).SetEase(Ease.OutQuad))
+            .Append(fireBounceTarget.DOLocalMove(fireBounceStartLocalPos, fireBounceDuration * 0.65f).SetEase(Ease.OutBack));
     }
 
-    // ---------------------------------------------------------------
-    
     private void UpdateShotsText()
     {
         if (shotsText != null) shotsText.text = shotsRemaining.ToString();
@@ -460,5 +429,32 @@ public class Shooter : MonoBehaviour
                 kv.Value.IsTargeted = false;
 
         pendingTargets.Clear();
+    }
+
+    private static Vector3 EvaluateSplineWorldPos(Spline spline, Transform root, float t)
+    {
+        float3 local = SplineUtility.EvaluatePosition(spline, t);
+        return root.TransformPoint(new Vector3(local.x, local.y, local.z));
+    }
+
+  
+    private static void GetSplineTangentAndUp(Spline spline, Transform root, float t, out Vector3 forward, out Vector3 up)
+    {
+        float3 tanLocal = SplineUtility.EvaluateTangent(spline, t);
+        float3 upLocal = SplineUtility.EvaluateUpVector(spline, t);
+
+        Vector3 tanWorld = root.TransformDirection(new Vector3(tanLocal.x, tanLocal.y, tanLocal.z));
+        Vector3 upWorld = root.TransformDirection(new Vector3(upLocal.x, upLocal.y, upLocal.z));
+
+        forward = tanWorld.sqrMagnitude > 0.000001f ? tanWorld.normalized : Vector3.forward;
+        up = upWorld.sqrMagnitude > 0.000001f ? upWorld.normalized : Vector3.up;
+    }
+
+
+    private static Vector3 CalculateFormationWorldOffset(Spline spline, Transform root, float lookAhead, Vector3 offset)
+    {
+        GetSplineTangentAndUp(spline, root, lookAhead, out Vector3 forward, out Vector3 up);
+        Vector3 right = Vector3.Cross(up, forward).normalized;
+        return right * offset.x + up * offset.y + forward * offset.z;
     }
 }

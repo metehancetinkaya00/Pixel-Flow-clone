@@ -4,22 +4,19 @@ using UnityEngine;
 [RequireComponent(typeof(AudioSource))]
 public class Bullet : MonoBehaviour
 {
+    [Header("Movement")]
     public float speed = 18f;
     public float lifeTime = 4f;
+    public float arriveDistance = 0.08f;
 
+    [Header("Hit")]
     public float hitDestroyDuration = 0.12f;
     public float hitDestroyDelay = 0f;
 
-    public float arriveDistance = 0.08f;
-
     [Header("Audio")]
     public AudioSource audioSource;
-
-   
-
     public AudioClip blockHitSound;
     [Range(0f, 1f)] public float blockHitVolume = 1f;
-
     public bool use2DSound = true;
 
     private Shooter owner;
@@ -31,31 +28,19 @@ public class Bullet : MonoBehaviour
     private void Awake()
     {
         if (audioSource == null)
-        {
             audioSource = GetComponent<AudioSource>();
-        }
 
         if (audioSource != null)
         {
             audioSource.playOnAwake = false;
             audioSource.volume = 1f;
-
-            if (use2DSound)
-            {
-                audioSource.spatialBlend = 0f; // 2D ses, uzaklýktan kýsýlmaz
-            }
+            audioSource.spatialBlend = use2DSound ? 0f : 1f;
         }
     }
 
     private void Start()
     {
-
         Invoke(nameof(Expire), lifeTime);
-    }
-
-    private void Expire()
-    {
-        Destroy(gameObject);
     }
 
     public void Init(Shooter ownerShooter, int key, Block target)
@@ -67,84 +52,74 @@ public class Bullet : MonoBehaviour
 
     private void Update()
     {
-        if (resolved)
-        {
-            return;
-        }
+        if (resolved) return;
 
         if (targetBlock == null)
         {
-            Resolve(false);
+            Resolve(success: false);
             Destroy(gameObject);
             return;
         }
 
-        Vector3 targetPos = targetBlock.transform.position;
-        Vector3 toTarget = targetPos - transform.position;
+        Vector3 toTarget = targetBlock.transform.position - transform.position;
+        float distance = toTarget.magnitude;
 
-        float dist = toTarget.magnitude;
-
-        if (dist <= arriveDistance)
+        if (distance <= arriveDistance)
         {
-            bool success = TryHitTarget();
-            Resolve(success);
-            DestroyAfterHit(success);
+            bool hit = TryHitTarget();
+            Resolve(hit);
+            DestroyAfterHit(hit);
             return;
         }
 
-        Vector3 dir = toTarget / dist;
-
-        transform.forward = dir;
-        transform.position = Vector3.MoveTowards(transform.position, targetPos, speed * Time.deltaTime);
+        transform.forward = toTarget / distance;
+        transform.position = Vector3.MoveTowards(
+            transform.position,
+            targetBlock.transform.position,
+            speed * Time.deltaTime);
     }
 
     private void OnTriggerEnter(Collider other)
     {
-        if (resolved)
-        {
-            return;
-        }
+        if (resolved) return;
 
-        Block b = other.GetComponentInParent<Block>();
-        if (b == null)
-        {
-            return;
-        }
+        Block block = other.GetComponentInParent<Block>();
+        if (block == null) return;
+        if (targetBlock != null && block != targetBlock) return;
 
-        if (targetBlock != null && b != targetBlock)
-        {
-            return;
-        }
+        bool hit = TryHitTarget();
+        Resolve(hit);
+        DestroyAfterHit(hit);
+    }
 
-        bool success = TryHitTarget();
-        Resolve(success);
-        DestroyAfterHit(success);
+    private void OnDestroy()
+    {
+        if (!resolved)
+            Resolve(success: false);
     }
 
     private bool TryHitTarget()
     {
-        if (targetBlock == null)
-        {
-            return false;
-        }
-
-        if (BlockGridManager.Instance == null)
-        {
-            return false;
-        }
-
-        if (targetBlock.IsDying)
-        {
-            return false;
-        }
+        if (targetBlock == null) return false;
+        if (BlockGridManager.Instance == null) return false;
+        if (targetBlock.IsDying) return false;
 
         if (audioSource != null && blockHitSound != null)
-        {
             audioSource.PlayOneShot(blockHitSound, blockHitVolume);
-        }
 
         BlockGridManager.Instance.DestroyBlockTween(targetBlock, hitDestroyDuration, hitDestroyDelay);
         return true;
+    }
+
+    private void Resolve(bool success)
+    {
+        if (resolved) return;
+        resolved = true;
+
+        if (!success && targetBlock != null && !targetBlock.IsDying)
+            targetBlock.IsTargeted = false;
+
+        owner?.OnBulletResolved(lineKey, success);
     }
 
     private void DestroyAfterHit(bool success)
@@ -158,54 +133,17 @@ public class Bullet : MonoBehaviour
         }
 
         HideBulletVisuals();
-
-        float destroyDelayTime = blockHitSound.length + 0.05f;
-        Destroy(gameObject, destroyDelayTime);
+        Destroy(gameObject, blockHitSound.length + 0.05f);
     }
 
     private void HideBulletVisuals()
     {
-        Renderer[] renderers = GetComponentsInChildren<Renderer>();
-        foreach (Renderer r in renderers)
-        {
+        foreach (Renderer r in GetComponentsInChildren<Renderer>())
             r.enabled = false;
-        }
 
-        Collider[] colliders = GetComponentsInChildren<Collider>();
-        foreach (Collider c in colliders)
-        {
+        foreach (Collider c in GetComponentsInChildren<Collider>())
             c.enabled = false;
-        }
     }
 
-    private void OnDestroy()
-    {
-        if (!resolved)
-        {
-            Resolve(false);
-        }
-    }
-
-    private void Resolve(bool success)
-    {
-        if (resolved)
-        {
-            return;
-        }
-
-        resolved = true;
-
-        if (!success)
-        {
-            if (targetBlock != null && !targetBlock.IsDying)
-            {
-                targetBlock.IsTargeted = false;
-            }
-        }
-
-        if (owner != null)
-        {
-            owner.OnBulletResolved(lineKey, success);
-        }
-    }
+    private void Expire() => Destroy(gameObject);
 }

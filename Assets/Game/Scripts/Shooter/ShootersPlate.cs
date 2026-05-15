@@ -10,24 +10,13 @@ public class ShootersPlate : MonoBehaviour
         cachedTransform = transform;
     }
 
-    public void AttachToShooter(
-        Transform anchor,
-        Vector3 localOffset,
-        Vector3 localRotationEuler,
-        float duration)
+  
+    public void AttachToShooter(Transform anchor, Vector3 localOffset, Vector3 localRotationEuler, float duration)
     {
-        if (cachedTransform == null)
-        {
-            cachedTransform = transform;
-        }
-
-        if (anchor == null)
-        {
-            return;
-        }
+        if (anchor == null) return;
 
         DOTween.Kill(cachedTransform);
-        cachedTransform.SetParent(anchor, true);
+        cachedTransform.SetParent(anchor, worldPositionStays: true);
 
         Quaternion targetRotation = Quaternion.Euler(localRotationEuler);
 
@@ -38,90 +27,51 @@ public class ShootersPlate : MonoBehaviour
             return;
         }
 
-        Sequence seq = DOTween.Sequence();
-        seq.Join(cachedTransform.DOLocalMove(localOffset, duration).SetEase(Ease.OutQuad));
-        seq.Join(cachedTransform.DOLocalRotateQuaternion(targetRotation, duration).SetEase(Ease.OutQuad));
+        DOTween.Sequence()
+            .Join(cachedTransform.DOLocalMove(localOffset, duration).SetEase(Ease.OutQuad))
+            .Join(cachedTransform.DOLocalRotateQuaternion(targetRotation, duration).SetEase(Ease.OutQuad));
     }
 
-    public void MoveToSplineStart(
-        Vector3 worldTarget,
-        Quaternion worldRotation,
-        float duration,
-        Vector3 spinEuler)
-    {
-        if (cachedTransform == null)
-        {
-            cachedTransform = transform;
-        }
 
+    public void MoveToSplineStart(Vector3 worldTarget, Quaternion worldRotation, float duration)
+    {
         DOTween.Kill(cachedTransform);
-        cachedTransform.SetParent(null, true);
+        cachedTransform.SetParent(null, worldPositionStays: true);
 
         if (duration <= 0f)
         {
-            cachedTransform.position = worldTarget;
-            cachedTransform.rotation = worldRotation;
+            cachedTransform.SetPositionAndRotation(worldTarget, worldRotation);
             return;
         }
 
-        Vector3 targetEuler = worldRotation.eulerAngles + spinEuler;
-
-        Sequence seq = DOTween.Sequence();
-        seq.Join(cachedTransform.DOMove(worldTarget, duration).SetEase(Ease.OutQuad));
-        seq.Join(cachedTransform.DORotate(targetEuler, duration, RotateMode.FastBeyond360).SetEase(Ease.OutQuad));
-        seq.OnComplete(() =>
-        {
-            cachedTransform.position = worldTarget;
-            cachedTransform.rotation = worldRotation;
-        });
+        DOTween.Sequence()
+            .Join(cachedTransform.DOMove(worldTarget, duration).SetEase(Ease.OutQuad))
+            .Join(cachedTransform.DORotateQuaternion(worldRotation, duration).SetEase(Ease.OutQuad))
+            .OnComplete(() => cachedTransform.SetPositionAndRotation(worldTarget, worldRotation));
     }
 
-    public void MoveToLine(
-        Transform lineRoot,
-        Vector3 worldTarget,
-        Quaternion worldRotation,
-        float duration,
-        Vector3 spinEuler,
-        System.Action onComplete)
-    {
-        if (cachedTransform == null)
-        {
-            cachedTransform = transform;
-        }
 
+    public void MoveToLine(Transform lineRoot, Vector3 worldTarget, Quaternion worldRotation, float duration, System.Action onComplete)
+    {
         DOTween.Kill(cachedTransform);
-        cachedTransform.SetParent(null, true);
+        cachedTransform.SetParent(null, worldPositionStays: true);
 
         if (duration <= 0f)
         {
-            cachedTransform.position = worldTarget;
-            cachedTransform.rotation = worldRotation;
-
-            if (lineRoot != null)
-            {
-                cachedTransform.SetParent(lineRoot, true);
-            }
-
+            cachedTransform.SetPositionAndRotation(worldTarget, worldRotation);
+            cachedTransform.SetParent(lineRoot, worldPositionStays: true);
             onComplete?.Invoke();
             return;
         }
 
-        Vector3 targetEuler = worldRotation.eulerAngles + spinEuler;
-
-        Sequence seq = DOTween.Sequence();
-        seq.Join(cachedTransform.DOMove(worldTarget, duration).SetEase(Ease.OutQuad));
-        seq.Join(cachedTransform.DORotate(targetEuler, duration, RotateMode.FastBeyond360).SetEase(Ease.OutQuad));
-        seq.OnComplete(() =>
-        {
-            cachedTransform.position = worldTarget;
-            cachedTransform.rotation = worldRotation;
-
-            if (lineRoot != null)
+        DOTween.Sequence()
+            .Join(cachedTransform.DOMove(worldTarget, duration).SetEase(Ease.OutQuad))
+            .Join(cachedTransform.DORotateQuaternion(worldRotation, duration).SetEase(Ease.OutQuad))
+            .OnComplete(() =>
             {
-                cachedTransform.SetParent(lineRoot, true);
-            }
-
-            onComplete?.Invoke();
-        });
+                cachedTransform.SetPositionAndRotation(worldTarget, worldRotation);
+                cachedTransform.SetParent(lineRoot, worldPositionStays: true);
+                onComplete?.Invoke();
+            });
     }
 }

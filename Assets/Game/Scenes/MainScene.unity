@@ -173,7 +173,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MainSceneUI
   levelsSceneName: LevelScene
   playButtonText: {fileID: 0}
-  levelTexts: []
 --- !u!114 &94512768
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -554,7 +553,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MainSceneUI
   levelsSceneName: LevelScene
   playButtonText: {fileID: 0}
-  levelTexts: []
 --- !u!114 &343556255
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1637,7 +1635,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MainSceneUI
   levelsSceneName: LevelScene
   playButtonText: {fileID: 0}
-  levelTexts: []
 --- !u!114 &868906143
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1862,11 +1859,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MainSceneUI
   levelsSceneName: LevelScene
   playButtonText: {fileID: 1112775649}
-  levelTexts:
-  - {fileID: 1075128556}
-  - {fileID: 1257336249}
-  - {fileID: 841806499}
-  - {fileID: 1380660853}
 --- !u!114 &1044661233
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2951,6 +2943,7 @@ GameObject:
   - component: {fileID: 1360571583}
   - component: {fileID: 1360571582}
   - component: {fileID: 1360571581}
+  - component: {fileID: 1360571585}
   m_Layer: 5
   m_Name: Canvas
   m_TagString: Untagged
@@ -3046,6 +3039,20 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0, y: 0}
+--- !u!114 &1360571585
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1360571580}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c55faaa98527b084f8e90c5faa0e7e85, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MainSceneUI
+  levelsSceneName: LevelScene
+  playButtonText: {fileID: 1112775649}
 --- !u!1 &1380660852
 GameObject:
   m_ObjectHideFlags: 0
@@ -3312,7 +3319,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MainSceneUI
   levelsSceneName: LevelScene
   playButtonText: {fileID: 0}
-  levelTexts: []
 --- !u!114 &1535057072
 MonoBehaviour:
   m_ObjectHideFlags: 0

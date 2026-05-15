@@ -9,27 +9,23 @@ public class LevelLayout : ScriptableObject
 
     public BlockColor Get(int x, int y)
     {
-        int idx = y * width + x;
+        int index = y * width + x;
+        return IsValidIndex(index) ? cells[index] : BlockColor.None;
+    }
 
-        if (cells == null || idx < 0 || idx >= cells.Length)
-        {
-            return BlockColor.None;
-        }
+    public void Set(int x, int y, BlockColor value)
+    {
+        if (x < 0 || y < 0 || x >= width || y >= height) return;
 
-        return cells[idx];
+        EnsureCellsSize();
+
+        cells[y * width + x] = value;
     }
 
     public void EnsureCellsSize()
     {
-        if (width < 1)
-        {
-            width = 1;
-        }
-
-        if (height < 1)
-        {
-            height = 1;
-        }
+        width = Mathf.Max(1, width);
+        height = Mathf.Max(1, height);
 
         int targetSize = width * height;
 
@@ -39,50 +35,20 @@ public class LevelLayout : ScriptableObject
             return;
         }
 
-        if (cells.Length != targetSize)
-        {
-            BlockColor[] old = cells;
-            cells = new BlockColor[targetSize];
+        if (cells.Length == targetSize) return;
 
-            int copySize = old.Length < cells.Length ? old.Length : cells.Length;
+        BlockColor[] old = cells;
+        cells = new BlockColor[targetSize];
 
-            for (int i = 0; i < copySize; i++)
-            {
-                cells[i] = old[i];
-            }
-        }
-    }
-
-    public void Set(int x, int y, BlockColor value)
-    {
-        if (x < 0 || y < 0 || x >= width || y >= height)
-        {
-            return;
-        }
-
-        EnsureCellsSize();
-
-        int idx = y * width + x;
-
-        if (cells == null || idx < 0 || idx >= cells.Length)
-        {
-            return;
-        }
-
-        cells[idx] = value;
+        int copyCount = Mathf.Min(old.Length, cells.Length);
+        for (int i = 0; i < copyCount; i++)
+            cells[i] = old[i];
     }
 
     public void Resize(int newWidth, int newHeight)
     {
-        if (newWidth < 1)
-        {
-            newWidth = 1;
-        }
-
-        if (newHeight < 1)
-        {
-            newHeight = 1;
-        }
+        newWidth = Mathf.Max(1, newWidth);
+        newHeight = Mathf.Max(1, newHeight);
 
         int oldWidth = width;
         int oldHeight = height;
@@ -90,29 +56,22 @@ public class LevelLayout : ScriptableObject
 
         width = newWidth;
         height = newHeight;
+        cells = new BlockColor[width * height];
 
-        int targetSize = width * height;
-        cells = new BlockColor[targetSize];
+        if (oldCells == null) return;
 
-        if (oldCells == null)
-        {
-            return;
-        }
-
-        int copyWidth = oldWidth < width ? oldWidth : width;
-        int copyHeight = oldHeight < height ? oldHeight : height;
+        int copyWidth = Mathf.Min(oldWidth, width);
+        int copyHeight = Mathf.Min(oldHeight, height);
 
         for (int y = 0; y < copyHeight; y++)
         {
             for (int x = 0; x < copyWidth; x++)
             {
-                int oldIdx = y * oldWidth + x;
-                int newIdx = y * width + x;
+                int oldIndex = y * oldWidth + x;
+                int newIndex = y * width + x;
 
-                if (oldIdx >= 0 && oldIdx < oldCells.Length && newIdx >= 0 && newIdx < cells.Length)
-                {
-                    cells[newIdx] = oldCells[oldIdx];
-                }
+                if (oldIndex < oldCells.Length && newIndex < cells.Length)
+                    cells[newIndex] = oldCells[oldIndex];
             }
         }
     }
@@ -120,20 +79,17 @@ public class LevelLayout : ScriptableObject
     public void ClearAll()
     {
         EnsureCellsSize();
-
         for (int i = 0; i < cells.Length; i++)
-        {
             cells[i] = BlockColor.None;
-        }
     }
 
     public void FillAll(BlockColor value)
     {
         EnsureCellsSize();
-
         for (int i = 0; i < cells.Length; i++)
-        {
             cells[i] = value;
-        }
     }
+
+    private bool IsValidIndex(int index) =>
+        cells != null && index >= 0 && index < cells.Length;
 }

@@ -18,9 +18,7 @@ public class LevelFlowManager : MonoBehaviour
     [Min(0f)] public float volume = 1f;
     public bool use2DSound = true;
 
-    // ---------------------------------------------------------------
     private int currentLevelIndex;
-    // ---------------------------------------------------------------
 
     private void Awake()
     {
@@ -42,8 +40,7 @@ public class LevelFlowManager : MonoBehaviour
         currentLevelIndex = PlayerPrefs.GetInt("level_index", startLevelIndex);
         LoadLevel(currentLevelIndex);
 
-        if (audioSource != null && startSound != null)
-            audioSource.PlayOneShot(startSound, volume);
+        audioSource?.PlayOneShot(startSound, volume);
     }
 
     private void OnDisable()
@@ -51,12 +48,8 @@ public class LevelFlowManager : MonoBehaviour
         UnhookGridEvents();
     }
 
-    // ---------------------------------------------------------------
-   
-
     public void LoadNextLevel() => LoadLevel(currentLevelIndex + 1);
     public void ReloadCurrentLevel() => LoadLevel(currentLevelIndex);
-
 
     public void CompleteLevelAndSaveProgress()
     {
@@ -73,55 +66,44 @@ public class LevelFlowManager : MonoBehaviour
         }
     }
 
-    // ---------------------------------------------------------------
-  
-
     private void LoadLevel(int index)
     {
         if (database?.levels == null || database.levels.Length == 0) return;
 
-        index = Mathf.Clamp(index, 0, database.levels.Length - 1);
-        currentLevelIndex = index;
+        currentLevelIndex = Mathf.Clamp(index, 0, database.levels.Length - 1);
+
+        LevelData data = database.levels[currentLevelIndex];
+        if (data == null) return;
 
         LevelUIManager.Instance?.HideWin();
 
         CleanupDynamicObjects();
 
-        LevelData data = database.levels[currentLevelIndex];
-        if (data == null) return;
+        SplinePathDefinition chosenSpline = ResolveSpline(data.splinePathIndex);
 
-        SetupSplinePath(data);
-        SetupGrid(data);
+        if (ShooterQueueManager.Instance != null)
+        {
+            ShooterQueueManager.Instance.defaultSplinePath = chosenSpline;
+
+            if (data.queueLayout.columnCount > 0 && data.queueLayout.depthCount > 0)
+                ShooterQueueManager.Instance.ApplyLayout(data.queueLayout);
+        }
+
+        if (BlockGridManager.Instance != null)
+        {
+            UnhookGridEvents();
+            BlockGridManager.Instance.OnAllBlocksCleared += HandleLevelCompleted;
+            BlockGridManager.Instance.layout = data.layout;
+            BlockGridManager.Instance.BuildLevel();
+        }
+
         SpawnShooters(data);
-    }
-
-    private void SetupSplinePath(LevelData data)
-    {
-        if (ShooterQueueManager.Instance == null) return;
-
-        ShooterQueueManager.Instance.defaultSplinePath = ResolveSpline(data.splinePathIndex);
-
-        if (data.queueLayout.columnCount > 0 && data.queueLayout.depthCount > 0)
-            ShooterQueueManager.Instance.ApplyLayout(data.queueLayout);
-    }
-
-    private void SetupGrid(LevelData data)
-    {
-        if (BlockGridManager.Instance == null) return;
-
-        UnhookGridEvents();
-        BlockGridManager.Instance.OnAllBlocksCleared += HandleLevelCompleted;
-        BlockGridManager.Instance.layout = data.layout;
-        BlockGridManager.Instance.BuildLevel();
     }
 
     private void HandleLevelCompleted()
     {
         LevelUIManager.Instance?.ShowWin();
     }
-
-    // ---------------------------------------------------------------
-
 
     private void SpawnShooters(LevelData data)
     {
@@ -134,13 +116,13 @@ public class LevelFlowManager : MonoBehaviour
         {
             if (p.prefab == null) continue;
 
-            Shooter inst = Instantiate(p.prefab, spawnPos, p.prefab.transform.rotation);
-            inst.ApplyShots(p.shots);
-            inst.linkGroupId = p.groupId > 0 ? p.groupId : 0;
+            Shooter shooter = Instantiate(p.prefab, spawnPos, p.prefab.transform.rotation);
+            shooter.ApplyShots(p.shots);
+            shooter.linkGroupId = p.groupId > 0 ? p.groupId : 0;
 
             placements.Add(new ShooterQueueManager.SpawnedPlacement
             {
-                shooter = inst,
+                shooter = shooter,
                 column = p.column,
                 depth = p.depth
             });
@@ -149,19 +131,19 @@ public class LevelFlowManager : MonoBehaviour
         ShooterQueueManager.Instance.InitializeQueueFromPlacements(placements);
     }
 
-    // ---------------------------------------------------------------
-  
-
-    private SplinePathDefinition ResolveSpline(int idx)
+    private SplinePathDefinition ResolveSpline(int index)
     {
         if (splinePathsInScene == null || splinePathsInScene.Length == 0) return null;
-        return splinePathsInScene[Mathf.Clamp(idx, 0, splinePathsInScene.Length - 1)];
+        return splinePathsInScene[Mathf.Clamp(index, 0, splinePathsInScene.Length - 1)];
     }
 
     private void CleanupDynamicObjects()
     {
-        foreach (var bullet in FindObjectsOfType<Bullet>(true)) Destroy(bullet.gameObject);
-        foreach (var shooter in FindObjectsOfType<Shooter>(true)) Destroy(shooter.gameObject);
+        foreach (var bullet in FindObjectsOfType<Bullet>(true))
+            Destroy(bullet.gameObject);
+
+        foreach (var shooter in FindObjectsOfType<Shooter>(true))
+            Destroy(shooter.gameObject);
     }
 
     private void UnhookGridEvents()

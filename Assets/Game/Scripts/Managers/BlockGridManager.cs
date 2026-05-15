@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using System.Collections.Generic;
 using DG.Tweening;
 
@@ -13,104 +13,37 @@ public class BlockGridManager : MonoBehaviour
         public GameObject prefab;
     }
 
+    [Header("Layout")]
     public LevelLayout layout;
 
+    [Header("Grid World Space")]
     public Vector3 gridCenterWorld = Vector3.zero;
     public float gridWorldSizeX = 8f;
     public float gridWorldSizeZ = 8f;
 
+    [Header("Block Appearance")]
     public float blockFill = 0.92f;
     public float blockHeight = 1f;
-
     public ColorPrefabPair[] prefabsByColor;
 
-    public int aliveBlockCount;
+    public int aliveBlockCount { get; private set; }
+    public event System.Action OnAllBlocksCleared;
 
-    public System.Action OnAllBlocksCleared;
+    public Bounds GridBounds =>
+        new Bounds(gridCenterWorld, new Vector3(gridWorldSizeX, 5f, gridWorldSizeZ));
 
-    // ---------------------------------------------------------------
     private Dictionary<BlockColor, GameObject> prefabMap;
     private Block[,] gridBlocks;
 
     private float cellSizeX;
     private float cellSizeZ;
     private Vector3 gridOrigin;
-    // ---------------------------------------------------------------
-
-    public Bounds GridBounds =>
-        new Bounds(gridCenterWorld, new Vector3(gridWorldSizeX, 5f, gridWorldSizeZ));
-
-
-    public int BuildLineKey(int side, int lineIndex) => side * 100_000 + lineIndex;
-
-    // ---------------------------------------------------------------
 
     private void Awake()
     {
         Instance = this;
         BuildPrefabMap();
     }
-
-    // ---------------------------------------------------------------
-    
-
-    private void BuildPrefabMap()
-    {
-        prefabMap = new Dictionary<BlockColor, GameObject>();
-
-        if (prefabsByColor == null) return;
-
-        foreach (var pair in prefabsByColor)
-        {
-            if (pair != null && pair.prefab != null)
-                prefabMap[pair.color] = pair.prefab;
-        }
-    }
-
-    private GameObject GetPrefab(BlockColor color)
-    {
-        if (prefabMap == null) BuildPrefabMap();
-        prefabMap.TryGetValue(color, out GameObject prefab);
-        return prefab;
-    }
-
-    // ---------------------------------------------------------------
- 
-
-    private void RecalcGridMetrics()
-    {
-        layout.width = Mathf.Max(1, layout.width);
-        layout.height = Mathf.Max(1, layout.height);
-        gridWorldSizeX = Mathf.Max(0.01f, gridWorldSizeX);
-        gridWorldSizeZ = Mathf.Max(0.01f, gridWorldSizeZ);
-
-        cellSizeX = gridWorldSizeX / layout.width;
-        cellSizeZ = gridWorldSizeZ / layout.height;
-        gridOrigin = gridCenterWorld - new Vector3(gridWorldSizeX * 0.5f, 0f, gridWorldSizeZ * 0.5f);
-    }
-
-    private Vector3 GridToWorld(int x, int y)
-    {
-        float px = gridOrigin.x + (x + 0.5f) * cellSizeX;
-        float pz = gridOrigin.z + (y + 0.5f) * cellSizeZ;
-        return new Vector3(px, gridCenterWorld.y, pz);
-    }
-
-  
-    private int WorldToGridX(float worldX)
-    {
-        int index = Mathf.FloorToInt((worldX - gridOrigin.x) / cellSizeX);
-        return Mathf.Clamp(index, 0, layout.width - 1);
-    }
-
-    private int WorldToGridZ(float worldZ)
-    {
-        int index = Mathf.FloorToInt((worldZ - gridOrigin.z) / cellSizeZ);
-        return Mathf.Clamp(index, 0, layout.height - 1);
-    }
-
-    // ---------------------------------------------------------------
-  
 
     public void BuildLevel()
     {
@@ -127,8 +60,10 @@ public class BlockGridManager : MonoBehaviour
         {
             for (int x = 0; x < layout.width; x++)
             {
-                int srcY = (layout.height - 1) - y;
-                BlockColor color = layout.Get(x, srcY);
+                // Layout'un üst satırı dünyada arkaya karşılık gelir,
+                // bu yüzden y eksenini ters çeviriyoruz.
+                int layoutY = (layout.height - 1) - y;
+                BlockColor color = layout.Get(x, layoutY);
 
                 if (color == BlockColor.None) continue;
 
@@ -136,14 +71,14 @@ public class BlockGridManager : MonoBehaviour
                 if (prefab == null) continue;
 
                 Vector3 pos = GridToWorld(x, y);
-                GameObject inst = Instantiate(prefab, pos, Quaternion.identity, transform);
+                GameObject instance = Instantiate(prefab, pos, Quaternion.identity, transform);
 
-                inst.transform.localScale = new Vector3(
+                instance.transform.localScale = new Vector3(
                     cellSizeX * blockFill,
-                    blockHeight > 0f ? blockHeight : inst.transform.localScale.y,
+                    blockHeight > 0f ? blockHeight : instance.transform.localScale.y,
                     cellSizeZ * blockFill);
 
-                Block block = inst.GetComponent<Block>() ?? inst.AddComponent<Block>();
+                Block block = instance.GetComponent<Block>() ?? instance.AddComponent<Block>();
                 block.color = color;
                 block.gridPos = new Vector2Int(x, y);
                 block.IsDying = false;
@@ -154,13 +89,9 @@ public class BlockGridManager : MonoBehaviour
             }
         }
 
-      
         if (aliveBlockCount == 0)
             OnAllBlocksCleared?.Invoke();
     }
-
-    // ---------------------------------------------------------------
- 
 
     public void DestroyBlockTween(Block block, float duration, float delay)
     {
@@ -172,19 +103,9 @@ public class BlockGridManager : MonoBehaviour
         var col = block.GetComponent<Collider>();
         if (col != null) col.enabled = false;
 
- 
-        Vector2Int pos = block.gridPos;
-        if (gridBlocks != null &&
-            pos.x >= 0 && pos.x < layout.width &&
-            pos.y >= 0 && pos.y < layout.height &&
-            gridBlocks[pos.x, pos.y] == block)
-        {
-            gridBlocks[pos.x, pos.y] = null;
-        }
+        RemoveFromGrid(block);
 
-        GameObject obj = block.gameObject;
-        Transform t = obj.transform;
-
+        Transform t = block.transform;
         DOTween.Kill(t);
 
         DOTween.Sequence()
@@ -198,14 +119,12 @@ public class BlockGridManager : MonoBehaviour
                 if (aliveBlockCount == 0)
                     OnAllBlocksCleared?.Invoke();
 
-                if (obj != null) Destroy(obj);
+                Destroy(block.gameObject);
             });
     }
 
-    // ---------------------------------------------------------------
-
-
-  
+    // Shooter'ın dünya pozisyonuna göre hangi kenar ve satır/sütundan
+    // ateş edeceğini belirler.
     public bool TryResolveShooterLine(Vector3 shooterPos, out int side, out int lineIndex)
     {
         side = 0;
@@ -215,18 +134,16 @@ public class BlockGridManager : MonoBehaviour
 
         Bounds bounds = GridBounds;
 
- 
         if (shooterPos.x < bounds.min.x) { side = 0; lineIndex = WorldToGridZ(shooterPos.z); return true; }
         if (shooterPos.x > bounds.max.x) { side = 1; lineIndex = WorldToGridZ(shooterPos.z); return true; }
         if (shooterPos.z < bounds.min.z) { side = 2; lineIndex = WorldToGridX(shooterPos.x); return true; }
         if (shooterPos.z > bounds.max.z) { side = 3; lineIndex = WorldToGridX(shooterPos.x); return true; }
 
-   
+        // Grид içindeyse en yakın kenara ata
         float dl = shooterPos.x - bounds.min.x;
         float dr = bounds.max.x - shooterPos.x;
         float db = shooterPos.z - bounds.min.z;
         float dt = bounds.max.z - shooterPos.z;
-
         float minDist = Mathf.Min(dl, dr, db, dt);
 
         if (Mathf.Approximately(minDist, dl)) side = 0;
@@ -241,7 +158,7 @@ public class BlockGridManager : MonoBehaviour
         return true;
     }
 
-   
+    // Shooter'ın rengi ile eşleşen, henüz hedeflenmemiş ilk bloğu rezerve eder.
     public bool TryReserveTargetByLine(BlockColor shooterColor, int side, int lineIndex, out Block target)
     {
         target = null;
@@ -265,8 +182,58 @@ public class BlockGridManager : MonoBehaviour
         return true;
     }
 
-    // ---------------------------------------------------------------
- 
+    public int BuildLineKey(int side, int lineIndex) => side * 100_000 + lineIndex;
+
+    private void BuildPrefabMap()
+    {
+        prefabMap = new Dictionary<BlockColor, GameObject>();
+        if (prefabsByColor == null) return;
+
+        foreach (var pair in prefabsByColor)
+        {
+            if (pair?.prefab != null)
+                prefabMap[pair.color] = pair.prefab;
+        }
+    }
+
+    private GameObject GetPrefab(BlockColor color)
+    {
+        if (prefabMap == null) BuildPrefabMap();
+        prefabMap.TryGetValue(color, out GameObject prefab);
+        return prefab;
+    }
+
+    private void RecalcGridMetrics()
+    {
+        layout.width = Mathf.Max(1, layout.width);
+        layout.height = Mathf.Max(1, layout.height);
+        gridWorldSizeX = Mathf.Max(0.01f, gridWorldSizeX);
+        gridWorldSizeZ = Mathf.Max(0.01f, gridWorldSizeZ);
+
+        cellSizeX = gridWorldSizeX / layout.width;
+        cellSizeZ = gridWorldSizeZ / layout.height;
+        gridOrigin = gridCenterWorld - new Vector3(gridWorldSizeX * 0.5f, 0f, gridWorldSizeZ * 0.5f);
+    }
+
+    private Vector3 GridToWorld(int x, int y) => new Vector3(
+        gridOrigin.x + (x + 0.5f) * cellSizeX,
+        gridCenterWorld.y,
+        gridOrigin.z + (y + 0.5f) * cellSizeZ);
+
+    private int WorldToGridX(float worldX) =>
+        Mathf.Clamp(Mathf.FloorToInt((worldX - gridOrigin.x) / cellSizeX), 0, layout.width - 1);
+
+    private int WorldToGridZ(float worldZ) =>
+        Mathf.Clamp(Mathf.FloorToInt((worldZ - gridOrigin.z) / cellSizeZ), 0, layout.height - 1);
+
+    private void RemoveFromGrid(Block block)
+    {
+        Vector2Int pos = block.gridPos;
+        if (gridBlocks == null) return;
+        if (pos.x < 0 || pos.x >= layout.width || pos.y < 0 || pos.y >= layout.height) return;
+        if (gridBlocks[pos.x, pos.y] == block)
+            gridBlocks[pos.x, pos.y] = null;
+    }
 
     private Block FindFirstInRowFromLeft(int zIndex)
     {
@@ -299,8 +266,6 @@ public class BlockGridManager : MonoBehaviour
             if (gridBlocks[xIndex, z] is { IsDying: false } b) return b;
         return null;
     }
-
-    // ---------------------------------------------------------------
 
     private void ClearChildren()
     {
