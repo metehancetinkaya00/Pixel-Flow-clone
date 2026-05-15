@@ -197,7 +197,6 @@ public class ShooterQueueManager : MonoBehaviour
     }
 
 
-
     private void ActivateQueuedGroup(int groupId)
     {
         if (returningPlates.Count > 0) return;
@@ -276,7 +275,6 @@ public class ShooterQueueManager : MonoBehaviour
                 onFinished: () => { ReleasePlate(shooter); PlaceToReservedFrontSlot(shooter); });
         });
     }
-
 
 
     private List<QueueGroupMember> GatherQueuedGroup(int groupId)
@@ -700,7 +698,6 @@ public class ShooterQueueManager : MonoBehaviour
 
         return startWorld + right * formationOffset.x + up * formationOffset.y + forward * formationOffset.z;
     }
-
 
 
     private bool IsValidSlot(int column, int depth) =>
