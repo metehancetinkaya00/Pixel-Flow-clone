@@ -223,7 +223,7 @@ public class ShooterQueueManager : MonoBehaviour
         var members = GatherQueuedGroup(groupId);
         if (members.Count == 0 || AvailablePlateCount() < members.Count) return;
 
-        // Hepsi depth 0'da olmalý ve farklý kolonlarda
+    
         var usedColumns = new HashSet<int>();
         foreach (var m in members)
         {
@@ -506,7 +506,7 @@ public class ShooterQueueManager : MonoBehaviour
     {
         EnsureFrontSlots();
 
-        // Saðlýklý shooter'larý topla
+        
         var ordered = new List<Shooter>();
         for (int i = 0; i < frontShooters.Length; i++)
         {
