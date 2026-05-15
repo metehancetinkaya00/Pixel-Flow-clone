@@ -68,7 +68,7 @@ public class ShooterQueueManager : MonoBehaviour
     }
 
     // ---------------------------------------------------------------
-    // Layout & kurulum
+  
 
     public void ApplyLayout(QueueLayoutSettings settings)
     {
@@ -124,7 +124,7 @@ public class ShooterQueueManager : MonoBehaviour
 
         if (queueGrid == null || slotMatrix == null) return;
 
-        // Grid ve front'u temizle
+     
         for (int col = 0; col < columns; col++)
             for (int dep = 0; dep < depthCount; dep++)
                 queueGrid[col, dep] = null;
@@ -147,7 +147,7 @@ public class ShooterQueueManager : MonoBehaviour
     }
 
     // ---------------------------------------------------------------
-    // Aktivasyon – kullanýcý bir shooter'a týkladýðýnda buraya gel
+ 
 
     public void TryActivateShooter(Shooter clicked)
     {
@@ -163,7 +163,7 @@ public class ShooterQueueManager : MonoBehaviour
 
         if (inQueue)
         {
-            if (depth != 0) return; // sadece en öndekiler aktive olabilir
+            if (depth != 0) return; 
 
             if (clicked.linkGroupId > 0) ActivateQueuedGroup(clicked.linkGroupId);
             else ActivateQueuedShooter(clicked, column);
@@ -175,7 +175,7 @@ public class ShooterQueueManager : MonoBehaviour
     }
 
     // ---------------------------------------------------------------
-    // Tekli aktivasyon
+
 
     private void ActivateQueuedShooter(Shooter shooter, int column)
     {
@@ -214,7 +214,7 @@ public class ShooterQueueManager : MonoBehaviour
     }
 
     // ---------------------------------------------------------------
-    // Grup aktivasyonu
+ 
 
     private void ActivateQueuedGroup(int groupId)
     {
@@ -223,7 +223,7 @@ public class ShooterQueueManager : MonoBehaviour
         var members = GatherQueuedGroup(groupId);
         if (members.Count == 0 || AvailablePlateCount() < members.Count) return;
 
-        // Hepsi depth 0'da olmalý ve farklý kolonlarda
+        // Hepsi depth 0'da olmalÃ½ ve farklÃ½ kolonlarda
         var usedColumns = new HashSet<int>();
         foreach (var m in members)
         {
@@ -237,7 +237,7 @@ public class ShooterQueueManager : MonoBehaviour
 
         float center = (members.Count - 1) * 0.5f;
 
-        // Önce plate rezervasyonu yap, sonra hareket baþlat
+       
         for (int i = 0; i < members.Count; i++)
         {
             Vector3 offset = new Vector3(0f, 0f, (i - center) * groupSideSpacing);
@@ -294,7 +294,7 @@ public class ShooterQueueManager : MonoBehaviour
     }
 
     // ---------------------------------------------------------------
-    // Grup toplama yardýmcýlarý
+  
 
     private List<QueueGroupMember> GatherQueuedGroup(int groupId)
     {
@@ -327,7 +327,7 @@ public class ShooterQueueManager : MonoBehaviour
     }
 
     // ---------------------------------------------------------------
-    // Dýþarýdan çaðrýlan: shooter ölünce temizlik yap
+   
 
     public void NotifyShooterDestroyed(Shooter shooter)
     {
@@ -344,7 +344,7 @@ public class ShooterQueueManager : MonoBehaviour
     }
 
     // ---------------------------------------------------------------
-    // Queue grid operasyonlarý
+  
 
     private void PopColumnHead(int column)
     {
@@ -358,7 +358,7 @@ public class ShooterQueueManager : MonoBehaviour
         ShiftColumnUp(column, depth);
     }
 
-    // depth'ten baþlayarak yukarýyý aþaðýya çek
+
     private void ShiftColumnUp(int column, int fromDepth)
     {
         for (int i = fromDepth; i < depthCount - 1; i++)
@@ -412,7 +412,7 @@ public class ShooterQueueManager : MonoBehaviour
     }
 
     // ---------------------------------------------------------------
-    // Front slot yönetimi
+
 
     private void EnsureFrontSlots()
     {
@@ -464,7 +464,7 @@ public class ShooterQueueManager : MonoBehaviour
     {
         if (frontSlotLookup.TryGetValue(shooter, out int slotIndex)) return slotIndex;
 
-        // Lookup'ta yoksa boþ slot bul ve rezerve et
+        
         slotIndex = GetFirstEmptyFrontSlot();
         if (slotIndex >= 0) ReserveFrontSlot(shooter, slotIndex);
         return slotIndex;
@@ -483,7 +483,7 @@ public class ShooterQueueManager : MonoBehaviour
         }
         else
         {
-            // Lookup bozuksa brute-force temizle
+      
             for (int i = 0; i < frontShooters.Length; i++)
                 if (frontShooters[i] == shooter) frontShooters[i] = null;
         }
@@ -501,12 +501,12 @@ public class ShooterQueueManager : MonoBehaviour
     private void PlaceToReservedFrontSlot(Shooter shooter) =>
         PlaceToFrontSlot(shooter, GetFrontSlot(shooter));
 
-    // Boþluklarý sola kaydýr; meþgul olanlar için tekrar dene
+    
     private void FillFrontGaps()
     {
         EnsureFrontSlots();
 
-        // Saðlýklý shooter'larý topla
+        // SaÃ°lÃ½klÃ½ shooter'larÃ½ topla
         var ordered = new List<Shooter>();
         for (int i = 0; i < frontShooters.Length; i++)
         {
@@ -537,20 +537,20 @@ public class ShooterQueueManager : MonoBehaviour
                 s.ShiftToFrontSlot(target, FillFrontGaps);
         }
 
-        // Bir shooter hâlâ meþgulse kýsa süre sonra tekrar dene
+      
         if (needsRetry)
             DOVirtual.DelayedCall(0.05f, FillFrontGaps);
     }
 
     // ---------------------------------------------------------------
-    // Plate sistemi
+
 
     private int AvailablePlateCount() => plateStack.Count - returningPlates.Count;
 
     private bool TryAssignPlate(Shooter shooter, Vector3 formationOffset)
     {
         if (shooter == null) return false;
-        if (shooterPlateMap.ContainsKey(shooter)) return true; // zaten var
+        if (shooterPlateMap.ContainsKey(shooter)) return true; 
 
         ShootersPlate plate = TakePlate();
         if (plate == null) return false;
@@ -587,7 +587,7 @@ public class ShooterQueueManager : MonoBehaviour
 
         shooterPlateMap.Remove(shooter);
 
-        if (plateStack.Contains(plate)) return; // zaten havuzda
+        if (plateStack.Contains(plate)) return; 
 
         plateStack.Add(plate);
         returningPlates.Add(plate);
@@ -606,7 +606,7 @@ public class ShooterQueueManager : MonoBehaviour
 
             if (plate == null) { plateStack.RemoveAt(last); continue; }
 
-            // Dönmekte olan platelere dokunma
+       
             if (returningPlates.Contains(plate)) return null;
 
             plateStack.RemoveAt(last);
@@ -685,7 +685,7 @@ public class ShooterQueueManager : MonoBehaviour
     }
 
     // ---------------------------------------------------------------
-    // Spline yardýmcýsý
+
 
     private Vector3 GetSplineStartWorldPosition(Shooter shooter, Vector3 formationOffset)
     {
@@ -724,7 +724,7 @@ public class ShooterQueueManager : MonoBehaviour
     }
 
     // ---------------------------------------------------------------
-    // Genel yardýmcýlar
+   
 
     private bool IsValidSlot(int column, int depth) =>
         slotMatrix != null && column >= 0 && column < columns && depth >= 0 && depth < depthCount;
